@@ -830,12 +830,19 @@ function setupAudio() {
         uniform float uCenterVortex; // Center vortex intensity
         uniform float uAngleBeat; // Angle beat mode (0 or 1)
         
+        // Dodajemy stałą złotego podziału dla wzorów Fibonacciego
+        #define PHI 1.61803398875
+
         #define MAX_ITERATIONS 100
         
         void main() {
           // Audio effect - use volume to modulate parameters
           float audioEffect = uAudioVolume * uAudioReactivity;
           
+          // Smooth audio transitions using a sigmoid function to prevent sharp edges
+          float smoothAudio = 1.0 / (1.0 + exp(-10.0 * (audioEffect - 0.5))) * audioEffect;
+          smoothAudio = mix(audioEffect, smoothAudio, 0.7); // Blend for natural effect
+
           // Scale coordinates
           vec2 uv = vTexCoord;
           uv = uv * 2.0 - 1.0;
@@ -843,38 +850,38 @@ function setupAudio() {
           
           // Time animation and rotation
           float time = uTime * 0.3;
-          mat2 rot = mat2(cos(time * 0.2), -sin(time * 0.2), sin(time * 0.2), cos(time * 0.2));
+          float rotAngle = time * 0.2 * PHI; // Dodajemy złoty podział do animacji
+          mat2 rot = mat2(cos(rotAngle), -sin(rotAngle), sin(rotAngle), cos(rotAngle));
           uv = rot * uv;
           
           // Zoom based on beat detection or continuous audio
           float zoomFactor = 1.0;
           
-          // If beat mode is enabled - zoom based on beats with strong response
+          // If beat mode is enabled - zoom based on beats with strong but smooth response
           if (uBeatMode > 0.5) {
-            // Beat detected - quick zoom in then slower zoom out
-            float beatEffectTime = mod(uTime * 30.0, 100.0);
             if (uBeatDetected > 0.5) {
-              // Sharp zoom in when beat hits
-              zoomFactor = 1.0 + audioEffect * 3.0;
+              // Zastępujemy ostrą zmianę płynniejszą funkcją wykładniczą
+              float beatIntensity = pow(smoothAudio, 2.0) * 3.0;
+              zoomFactor = 1.0 + beatIntensity;
             } else {
               // Gradual zoom out between beats
-              zoomFactor = 1.0 + audioEffect * 1.0;
+              float fadeOut = smoothAudio * (0.5 + 0.5 * sin(time * 4.0));
+              zoomFactor = 1.0 + fadeOut;
             }
           } else {
-            // Continuous audio-reactive mode
-            zoomFactor = 1.0 + audioEffect * 2.0 + 0.05 * sin(time * 2.0);
+            // Continuous audio-reactive mode with smoother transitions
+            // Dodajemy złoty podział do pulsowania dla naturalniejszego efektu
+            zoomFactor = 1.0 + smoothAudio * 2.0 + 0.05 * sin(time * PHI);
           }
           
           // Apply zoom factor
-          float pulsatingZoom = uZoom * zoomFactor;
-          
+          float pulsatingZoom = mix(uZoom, uZoom * zoomFactor, smoothstep(0.0, 1.0, smoothAudio));          
           // Make the fractal truly seamless with proper centering
           vec2 center = vec2(0.0, 0.0);
           uv = (uv - center) / pulsatingZoom + center;
           
           // Add drift in various directions
-          uv += vec2(sin(time * 0.3) * 0.3, cos(time * 0.4) * 0.2);
-          
+          uv += vec2(sin(time * 0.3 * PHI) * 0.3, cos(time * 0.4 * PHI) * 0.2);          
           // Fractal implementation
           vec2 c = uv;
           vec2 z = vec2(0.0);
@@ -883,26 +890,35 @@ function setupAudio() {
           float lastLength = 0.0;
           
           // Variable fractal shape - now reacts to audio
-          float audioPowerBoost = 1.0 + audioEffect * 2.0; // Greater reaction for power
+          float audioPowerBoost = 1.0 + smoothAudio * 2.0; // Greater reaction for power but smoother
           float morphPower = uPower * (1.0 + 0.2 * sin(time * 0.7)) * audioPowerBoost;
+
+          // Fibonacci spiral constants dla naturalniejszych wzorów fraktalnych
+          float goldenAngle = PHI * 2.0 * 3.14159; 
           
           for (int i = 0; i < MAX_ITERATIONS; i++) {
             if (float(i) > uDetail) break;
             
-            // Spiral version of Mandelbrot with time twist and audio
-            float angle = atan(z.y, z.x) * morphPower + time * 0.2 + audioEffect * 3.0;
-            float radius = pow(length(z) + 0.1 * sin(time * 0.5), morphPower);
-            float spiral = 0.1 * sin(length(z) * 10.0 + time * 2.0) * uSpiralFactor;
+          // Ulepszona wersja spirali z wykorzystaniem wzorów Fibonacciego
+          float spiralParam = length(z) * PHI; // Parameter bazujący na Fibonaccim
+          float angle = atan(z.y, z.x) * morphPower + time * 0.2 + smoothAudio * 3.0;
+          float radius = pow(length(z) + 0.1 * sin(time * 0.5 * PHI), morphPower);
+
+          // Dodajemy spirale Fibonacciego zamiast zwykłej sinusoidy
+          float spiral = 0.1 * sin(spiralParam * 10.0 + time * PHI) * uSpiralFactor;
             angle += spiral;
             z = vec2(radius * cos(angle), radius * sin(angle)) + c;
             
             // Store length before checking limit
             lastLength = length(z);
             
-            if (lastLength > 2.0) {
-              smoothValue = float(i) - log(log(lastLength)) / log(2.0);
-              break;
-            }
+          if (lastLength > 2.0) {
+            // Płynniejsze przejście na krawędzi
+            float edge = length(z) / 2.0;
+            smoothValue = float(i) - log(log(lastLength)) / log(2.0);
+            smoothValue = mix(smoothValue, float(i), smoothstep(1.0, 2.0, edge));
+            break;
+          }
             
             iter += 1.0;
           }
