@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PsyTrance Fractal Audio Visualizer</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #000;
+      font-family: 'Courier New', monospace;
+      background: linear-gradient(to bottom, #000000, #120024);
+      color: #00ff99;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    .controls {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      padding: 15px;
+      border-radius: 10px;
+      border: 1px solid #00ff99;
+      background: linear-gradient(to bottom, #000000, #170026);
+      color: #00ff99;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      box-shadow: 0 0 15px #00ff99, inset 0 0 10px rgba(0, 255, 153, 0.3);
+      max-height: 95vh;
+      overflow-y: auto;
+    }
+    .slider-container {
+      margin: 5px 0;
+    }
+    label {
+      display: inline-block;
+      width: 120px;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      height: 5px;
+      background: linear-gradient(to right, #3d00a8, #00ff99);
+      border-radius: 5px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 15px;
+      height: 15px;
+      background: #ff00ff;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 5px #ff00ff;
+    }
+    .audio-enable {
+      margin: 10px 0;
+      text-align: center;
+    }
+    .audio-btn {
+      background: linear-gradient(to right, #ff00ff, #00ffff);
+      border: none;
+      color: #000;
+      padding: 10px 20px;
+      border-radius: 25px;
+      font-weight: bold;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      box-shadow: 0 0 10px rgba(255, 0, 255, 0.7);
+      transition: all 0.3s;
+    }
+    .audio-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px rgba(255, 0, 255, 1);
+    }
+    .preset-btn {
+      background: linear-gradient(to right, #ff00ff, #3d00a8);
+      border: none;
+      color: #fff;
+      padding: 5px 10px;
+      border-radius: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      box-shadow: 0 0 5px rgba(255, 0, 255, 0.7);
+      transition: all 0.2s;
+      margin: 2px;
+      font-size: 12px;
+    }
+    .preset-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 10px rgba(255, 0, 255, 1);
+    }
+    .vu-meter {
+      margin-top: 15px;
+      background: #000;
+      height: 20px;
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid #ff00ff;
+    }
+    .vu-level {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(to right, #00ff99, #ff00ff);
+      transition: width 0.1s;
+    }
+    .vu-text {
+      position: absolute;
+      top: 2px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 12px;
+      color: #fff;
+      text-shadow: 0 0 2px #000;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+        <div class="controls">
+    <h2 style="margin-top: 0; text-align: center; color: #ff00ff; text-shadow: 0 0 5px #ff00ff;">PsyTrance Fractal</h2>
+    <div class="audio-enable">
+      <button id="audioEnable" class="audio-btn">Enable Audio Reactive Mode</button>
+    </div>
+    <div class="vu-meter">
+      <div id="vuLevel" class="vu-level"></div>
+      <div class="vu-text">Audio Level</div>
+    </div>
+    
+    <!-- Presets Section -->
+    <div style="margin: 10px 0; text-align: center; border-top: 1px solid #ff00ff; border-bottom: 1px solid #ff00ff; padding: 10px 0;">
+      <div style="margin-bottom: 5px; color: #ff00ff;">Brainrot Presets:</div>
+      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 5px;">
+        <button class="preset-btn" data-preset="hypnotoad">Hypnotoad</button>
+        <button class="preset-btn" data-preset="dubstep">Dubstep Drop</button>
+        <button class="preset-btn" data-preset="acid">Acid Trip</button>
+        <button class="preset-btn" data-preset="psychout">Psych-Out</button>
+        <button class="preset-btn" data-preset="vortex">Time Vortex</button>
+        <button class="preset-btn" data-preset="dmt">DMT Realm</button>
+      </div>
+    </div>
+    
+    <div class="slider-container">
+      <label for="zoom">Zoom:</label>
+      <input type="range" id="zoom" min="0.5" max="20" step="0.1" value="2">
+      <span id="zoomValue">2.0</span>
+    </div>
+    <div class="slider-container">
+      <label for="detail">Detail:</label>
+      <input type="range" id="detail" min="10" max="500" step="1" value="100">
+      <span id="detailValue">100</span>
+    </div>
+    <div class="slider-container">
+      <label for="power">Power:</label>
+      <input type="range" id="power" min="1" max="10" step="0.1" value="8">
+      <span id="powerValue">8.0</span>
+    </div>
+    <div class="slider-container">
+      <label for="speed">Speed:</label>
+      <input type="range" id="speed" min="0" max="2" step="0.01" value="0.5">
+      <span id="speedValue">0.5</span>
+    </div>
+    <div class="slider-container">
+      <label for="colorScale">Color Scale:</label>
+      <input type="range" id="colorScale" min="0.1" max="5" step="0.1" value="1.0">
+      <span id="colorScaleValue">1.0</span>
+    </div>
+    <div class="slider-container">
+      <label for="metallic">Metallic:</label>
+      <input type="range" id="metallic" min="0" max="1" step="0.01" value="0.5">
+      <span id="metallicValue">0.5</span>
+    </div>
+    <div class="slider-container">
+      <label for="instances">Instances:</label>
+      <input type="range" id="instances" min="1" max="20" step="1" value="8">
+      <span id="instancesValue">8</span>
+    </div>
+    <div class="slider-container">
+      <label for="audioReactivity">Audio React:</label>
+      <input type="range" id="audioReactivity" min="0" max="1" step="0.01" value="0.5">
+      <span id="audioReactivityValue">0.5</span>
+    </div>
+    <div class="slider-container">
+      <label for="spiralfactor">PsyEffect:</label>
+      <input type="range" id="spiralfactor" min="0" max="1" step="0.01" value="0.5">
+      <span id="spiralfactorValue">0.5</span>
+    </div>
+    <div class="slider-container">
+      <label for="angleChange">Angle Change:</label>
+      <input type="range" id="angleChange" min="0" max="1" step="0.01" value="0.5">
+      <span id="angleChangeValue">0.5</span>
+    </div>
+    <div class="slider-container">
+      <label for="centerVortex">Center Vortex:</label>
+      <input type="range" id="centerVortex" min="0" max="1" step="0.01" value="0.7">
+      <span id="centerVortexValue">0.7</span>
+    </div>
+    <div class="slider-container">
+      <label for="colorPalette">Color Palette:</label>
+      <select id="colorPalette" style="background: #000; color: #00ff99; border: 1px solid #00ff99; padding: 5px; border-radius: 5px;">
+        <option value="psytrance">PsyTrance</option>
+        <option value="mandelbrot">Mandelbrot Classic</option>
+        <option value="burning">Burning Ship</option>
+        <option value="julia">Julia Set</option>
+        <option value="rainbow">Rainbow</option>
+        <option value="neon">Neon Dreams</option>
+        <option value="cyberpunk">Cyberpunk</option>
+        <option value="vaporwave">Vaporwave</option>
+        <option value="synthwave">Synthwave</option>
+        <option value="hyperspace">Hyperspace</option>
+      </select>
+    </div>
+    <div class="slider-container">
+      <label for="zoomBeats">Zoom Beat Mode:</label>
+      <input type="checkbox" id="zoomBeats" style="width: 20px; height: 20px; cursor: pointer;">
+      <span>Enabled</span>
+    </div>
+    <div class="slider-container">
+      <label for="colorReact">Color React:</label>
+      <input type="range" id="colorReact" min="0" max="1" step="0.01" value="0.5">
+      <span id="colorReactValue">0.5</span>
+    </div>
+    <div class="slider-container">
+      <label for="angleBeat">Angle Beat:</label>
+      <input type="checkbox" id="angleBeat" style="width: 20px; height: 20px; cursor: pointer;">
+      <span>Enabled</span>
+    </div>
+  </div>
+
+  <script>
+    // Wait for DOM to fully load
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize WebGL
+      const canvas = document.getElementById('canvas');
+      if (!canvas) {
+        console.error('Cannot find canvas element');
+        return;
+      }
+      
+      const gl = canvas.getContext('webgl');
+      if (!gl) {
+        console.error('WebGL is not supported by your browser!');
+        return;
+      }
+      
+      // ===== AUDIO ANALYZER SETUP =====
+      let audioContext;
+      let analyser;
+      let microphone;
+      let audioEnabled = false;
+      let audioDataArray;
+      let audioVolume = 0;
+      let audioReactivity = 0.5;
+      let colorReactivity = 0.5;
+      let zoomBeatsEnabled = false;
+      let beatDetected = false;
+      let lastVolume = 0;
+      let volumeDelta = 0;
+      let volumeHistory = Array(8).fill(0);
+      let beatHistory = Array(8).fill(false);
+      let selectedPalette = "psytrance";
+      
+      // Beat detection thresholds
+      const BEAT_THRESHOLD = 0.15;
+      const BEAT_MIN_INTERVAL = 100; // ms
+      let lastBeatTime = 0;
+      
+      // Function to start audio analysis
+      function setupAudio() {
+        try {
+          // Create audio context
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioContext.createAnalyser();
+          
+          // Configure analyzer
+          analyser.fftSize = 256;
+          audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+          
+          // Connect microphone
+          navigator.mediaDevices.getUserMedia({audio: true})
+            .then(function(stream) {
+              microphone = audioContext.createMediaStreamSource(stream);
+              microphone.connect(analyser);
+              audioEnabled = true;
+              document.getElementById('audioEnable').textContent = 'Audio Reactive Mode Enabled!';
+              document.getElementById('audioEnable').style.background = 'linear-gradient(to right, #00ff99, #ff00ff)';
+            })
+            .catch(function(err) {
+              console.error('Microphone access error:', err);
+              alert('Cannot access microphone. Check permissions.');
+            });
+        } catch (e) {
+          console.error('Audio API initialization error:', e);
+          alert('Your browser does not support Web Audio API.');
+        }
+      }
+      
+      // Audio enable button
+      document.getElementById('audioEnable').addEventListener('click', setupAudio);
+      
+      // Audio reactivity slider
+      document.getElementById('audioReactivity').addEventListener('input', function() {
+        audioReactivity = parseFloat(this.value);
+        document.getElementById('audioReactivityValue').textContent = this.value;
+      });
+      
+      // Color reactivity slider
+      document.getElementById('colorReact').addEventListener('input', function() {
+        colorReactivity = parseFloat(this.value);
+        document.getElementById('colorReactValue').textContent = this.value;
+      });
+      
+      // Zoom beat mode toggle
+      document.getElementById('zoomBeats').addEventListener('change', function() {
+        zoomBeatsEnabled = this.checked;
+      });
+      
+      // Color palette selector
+      document.getElementById('colorPalette').addEventListener('change', function() {
+        selectedPalette = this.value;
+      });
+      
+      // Function for real-time audio analysis
+      function analyzeAudio() {
+        if (!audioEnabled || !analyser) return 0;
+        
+        // Get frequency data
+        analyser.getByteFrequencyData(audioDataArray);
+        
+        // Calculate average volume level
+        let sum = 0;
+        let bassBins = 0;
+        let bassSum = 0;
+        for (let i = 0; i < audioDataArray.length; i++) {
+          sum += audioDataArray[i];
+          
+          // Calculate bass frequencies separately (first 1/4 of bins typically)
+          if (i < audioDataArray.length / 4) {
+            bassSum += audioDataArray[i];
+            bassBins++;
+          }
+        }
+        let avg = sum / audioDataArray.length;
+        
+        // Store previous volume for delta calculation
+        lastVolume = audioVolume;
+        
+        // Normalize to 0-1 range
+        audioVolume = avg / 255;
+        
+        // Calculate bass energy - useful for beat detection
+        let bassEnergy = bassBins > 0 ? (bassSum / bassBins) / 255 : 0;
+        
+        // Calculate volume change
+        volumeDelta = audioVolume - lastVolume;
+        
+        // Shift volume history
+        volumeHistory.shift();
+        volumeHistory.push(audioVolume);
+        
+        // Beat detection
+        const now = Date.now();
+        beatDetected = false;
+        
+        // Beat is detected when:
+        // 1. Volume is above average threshold
+        // 2. Volume is significantly higher than recent history
+        // 3. Enough time has passed since last beat
+        
+        const avgHistory = volumeHistory.reduce((sum, vol) => sum + vol, 0) / volumeHistory.length;
+        
+        if (
+          audioVolume > 0.2 && // Minimum volume threshold
+          volumeDelta > BEAT_THRESHOLD && // Sudden increase
+          audioVolume > avgHistory * 1.2 && // Higher than recent average
+          now - lastBeatTime > BEAT_MIN_INTERVAL // Not too soon after last beat
+        ) {
+          beatDetected = true;
+          lastBeatTime = now;
+        }
+        
+        // Shift beat history
+        beatHistory.shift();
+        beatHistory.push(beatDetected);
+        
+        // Update VU meter
+        document.getElementById('vuLevel').style.width = (audioVolume * 100) + '%';
+        
+        return audioVolume;
+      }
+      
+      // Vertex shader - only passes coordinates
+      const vsSource = `
+        attribute vec4 aPosition;
+        varying vec2 vTexCoord;
+        void main() {
+          gl_Position = aPosition;
+          vTexCoord = aPosition.xy * 0.5 + 0.5;
+        }
+      `;
+
+      // Fragment shader - here's all the fractal magic
+      const fsSource = `
+        precision mediump float;
+        varying vec2 vTexCoord;
+        
+        uniform float uTime;
+        uniform float uZoom;
+        uniform float uDetail;
+        uniform float uPower;
+        uniform float uColorScale;
+        uniform vec2 uResolution;
+        uniform float uMetallic;
+        uniform float uInstances;
+        uniform float uAudioVolume;  // Audio volume level
+        uniform float uAudioReactivity; // Audio reactivity
+        uniform float uSpiralFactor; // Spiral factor
+        uniform float uBeatDetected; // Beat detection flag
+        uniform float uBeatMode; // Beat mode enabled
+        uniform float uColorReactivity; // Color reactivity
+        uniform int uColorPalette; // Color palette selection
+        uniform float uAngleChange; // Angle change rate
+        uniform float uCenterVortex; // Center vortex intensity
+        uniform float uAngleBeat; // Angle beat mode (0 or 1)
+        
+        #define MAX_ITERATIONS 100
+        
+        void main() {
+          // Audio effect - use volume to modulate parameters
+          float audioEffect = uAudioVolume * uAudioReactivity;
+          
+          // Scale coordinates
+          vec2 uv = vTexCoord;
+          uv = uv * 2.0 - 1.0;
+          uv.x *= uResolution.x / uResolution.y;
+          
+          // Time animation and rotation
+          float time = uTime * 0.3;
+          mat2 rot = mat2(cos(time * 0.2), -sin(time * 0.2), sin(time * 0.2), cos(time * 0.2));
+          uv = rot * uv;
+          
+          // Zoom based on beat detection or continuous audio
+          float zoomFactor = 1.0;
+          
+          // If beat mode is enabled - zoom based on beats with strong response
+          if (uBeatMode > 0.5) {
+            // Beat detected - quick zoom in then slower zoom out
+            float beatEffectTime = mod(uTime * 30.0, 100.0);
+            if (uBeatDetected > 0.5) {
+              // Sharp zoom in when beat hits
+              zoomFactor = 1.0 + audioEffect * 3.0;
+            } else {
+              // Gradual zoom out between beats
+              zoomFactor = 1.0 + audioEffect * 1.0;
+            }
+          } else {
+            // Continuous audio-reactive mode
+            zoomFactor = 1.0 + audioEffect * 2.0 + 0.05 * sin(time * 2.0);
+          }
+          
+          // Apply zoom factor
+          float pulsatingZoom = uZoom * zoomFactor;
+          
+          // Make the fractal truly seamless with proper centering
+          vec2 center = vec2(0.0, 0.0);
+          uv = (uv - center) / pulsatingZoom + center;
+          
+          // Add drift in various directions
+          uv += vec2(sin(time * 0.3) * 0.3, cos(time * 0.4) * 0.2);
+          
+          // Fractal implementation
+          vec2 c = uv;
+          vec2 z = vec2(0.0);
+          float iter = 0.0;
+          float smoothValue = 0.0;
+          float lastLength = 0.0;
+          
+          // Variable fractal shape - now reacts to audio
+          float audioPowerBoost = 1.0 + audioEffect * 2.0; // Greater reaction for power
+          float morphPower = uPower * (1.0 + 0.2 * sin(time * 0.7)) * audioPowerBoost;
+          
+          for (int i = 0; i < MAX_ITERATIONS; i++) {
+            if (float(i) > uDetail) break;
+            
+            // Spiral version of Mandelbrot with time twist and audio
+            float angle = atan(z.y, z.x) * morphPower + time * 0.2 + audioEffect * 3.0;
+            float radius = pow(length(z) + 0.1 * sin(time * 0.5), morphPower);
+            float spiral = 0.1 * sin(length(z) * 10.0 + time * 2.0) * uSpiralFactor;
+            angle += spiral;
+            z = vec2(radius * cos(angle), radius * sin(angle)) + c;
+            
+            // Store length before checking limit
+            lastLength = length(z);
+            
+            if (lastLength > 2.0) {
+              smoothValue = float(i) - log(log(lastLength)) / log(2.0);
+              break;
+            }
+            
+            iter += 1.0;
+          }
+          
+          // Psychedelic fractal coloring
+          vec3 color;
+          
+          if (iter < uDetail) {
+            // Smoothing factor for better color transitions
+            float smoothed = iter - log2(log2(lastLength)) + 4.0;
+            float normalized = smoothed / uDetail;
+            
+            // Color modulation by time, position and audio
+            float audioColorShift = time * 0.1 + audioEffect * 3.0; // Audio affects colors
+            float colorIndex = normalized * uColorScale + audioColorShift;
+            colorIndex += sin(uv.x * 10.0 + time + audioEffect * 5.0) * 0.1;
+            colorIndex += cos(uv.y * 8.0 + time * 0.8) * 0.1;
+            
+            // Color palette selection based on uColorPalette uniform
+            vec3 a, b, c, d;
+            
+            // Default psytrance palette
+            if (uColorPalette == 0) { // psytrance
+                a = vec3(0.8, 0.5, 0.4);
+                b = vec3(0.2, 0.4, 0.2);
+                c = vec3(2.0, 1.0, 1.0);
+                d = vec3(0.0, 0.33, 0.67);
+            } 
+            else if (uColorPalette == 1) { // mandelbrot classic
+                a = vec3(0.5, 0.2, 0.8);
+                b = vec3(0.3, 0.5, 0.3);
+                c = vec3(1.0, 1.0, 2.0);
+                d = vec3(0.2, 0.4, 0.6);
+            }
+            else if (uColorPalette == 2) { // burning ship
+                a = vec3(0.6, 0.1, 0.0);
+                b = vec3(0.4, 0.2, 0.1);
+                c = vec3(3.0, 2.0, 1.0);
+                d = vec3(0.3, 0.2, 0.1);
+            }
+            else if (uColorPalette == 3) { // julia set
+                a = vec3(0.2, 0.5, 0.8);
+                b = vec3(0.8, 0.2, 0.5);
+                c = vec3(1.0, 2.0, 1.0);
+                d = vec3(0.6, 0.0, 0.8);
+            }
+            else if (uColorPalette == 4) { // rainbow
+                a = vec3(0.5, 0.5, 0.5);
+                b = vec3(0.5, 0.5, 0.5);
+                c = vec3(1.0, 1.0, 1.0);
+                d = vec3(0.0, 0.33, 0.67);
+            }
+            else if (uColorPalette == 5) { // neon dreams
+                a = vec3(0.2, 0.1, 0.3);
+                b = vec3(0.9, 0.1, 0.8);
+                c = vec3(2.0, 0.5, 0.8);
+                d = vec3(0.1, 0.8, 0.9);
+            }
+            
+            // Super-charged beat detection for color flashes
+            if (uBeatDetected > 0.5) {
+                // More aggressive color shift on beats
+                a = mix(a, vec3(1.0, 1.0, 1.0), 0.5 * uColorReactivity);
+                b = mix(b, vec3(0.9, 0.1, 0.9), 0.6 * uColorReactivity);
+                // Flash effect on beats
+                c = mix(c, vec3(3.0, 3.0, 3.0), 0.4 * uColorReactivity);
+            }
+            
+            // Apply enhanced continuous audio reactivity to colors
+            float colorAudioEffect = audioEffect * uColorReactivity;
+            // Create color cycling effect based on audio
+            a = mix(a, vec3(a.z, a.x, a.y), colorAudioEffect);
+            b = mix(b, vec3(b.z, b.x, b.y), colorAudioEffect);
+            // Make colors pulse with audio intensity
+            float pulseFactor = 1.0 + colorAudioEffect * 0.5;
+            a *= pulseFactor;
+            b *= pulseFactor;
+            
+            color = a + b * cos(6.28318 * (c * colorIndex + d));
+            color = pow(color, vec3(0.75)); // Enhance saturation
+            
+            // Add concentric circles modulated by uMetallic and audio
+            float ringFreq = mix(10.0, 40.0, uMetallic) * (1.0 + audioEffect * 2.0);
+            float rings = sin(lastLength * ringFreq - time * 5.0) * 0.5 + 0.5;
+            color = mix(color, color * vec3(rings, 1.0-rings, rings*1.5), 0.3 * uMetallic);
+            
+            // Add pulsing effect synchronized with beat and audio
+            float beat = pow(sin(time * 4.0) * 0.5 + 0.5, 8.0) + audioEffect;
+            color = mix(color, vec3(1.0, 0.7, 0.2), beat * uMetallic * 0.5);
+            
+            // Hyperspiral in areas close to boundary
+            if (iter > uDetail * 0.7) {
+              float spiral = sin(atan(uv.y, uv.x) * 10.0 + length(uv) * 30.0 - time * 3.0) * 0.5 + 0.5;
+              float spiralIntensity = pow(normalized, 3.0) * uMetallic * (1.0 + audioEffect);
+              vec3 spiralColor = a + b * cos(6.28318 * (c * (spiral + time * 0.2) + d));
+              spiralColor = pow(spiralColor, vec3(0.75));
+              color = mix(color, spiralColor, spiralIntensity * 0.7);
+            }
+          } else {
+            // Hypnotic center core visualization - ultra psychedelic
+            float dist = length(uv);
+            
+            // Dynamic angle rotation based on audio and time
+            // This creates the changing angle effect every 1-2 seconds
+            float angleModulation = sin(time * 0.5) * 2.0 * 3.14159 * (1.0 + audioEffect * 3.0);
+            float angleOffset = time * 0.2 + audioEffect * 5.0; // Makes it rotate with audio
+            float angle = atan(uv.y, uv.x) + angleModulation + angleOffset;
+            
+            // Super detailed hypnotic spiral in center
+            float spiralFreq = 40.0 * (1.0 + audioEffect * 3.0);
+            float spiral = sin(angle * uInstances + dist * spiralFreq - time * 4.0) * 0.5 + 0.5;
+            float spiral2 = cos(angle * (uInstances * 0.7) - dist * spiralFreq * 1.8 + time * 5.0) * 0.5 + 0.5;
+            
+            // Rainbow spiral effect with audio reactivity
+            float rainbowSpeed = 2.0 + audioEffect * 4.0;
+            float rainbowFreq = 10.0 + audioEffect * 20.0;
+            float rainbowPhase = dist * rainbowFreq - time * rainbowSpeed;
+            
+            // Ultra-bright pulsing colors in spiral
+            vec3 a, b, c, d;
+            
+            // Rainbowy colors for center core with high saturation
+            a = vec3(0.9, 0.3, 0.9);
+            b = vec3(0.8, 0.8, 0.2);
+            c = vec3(3.0, 2.0, 1.0); 
+            d = vec3(0.3, 0.3, 0.7);
+            
+            // Change base colors based on audio
+            a = mix(a, vec3(0.4, 0.8, 0.7), audioEffect * 0.7);
+            b = mix(b, vec3(0.7, 0.2, 0.6), audioEffect * 0.7);
+            
+            vec3 spiralColor1 = a + b * cos(6.28318 * (c * (spiral + time * 0.3 + audioEffect) + d));
+            vec3 spiralColor2 = a + b * cos(6.28318 * (c * (spiral2 - time * 0.2) + d));
+            spiralColor1 = pow(spiralColor1, vec3(0.75));
+            spiralColor2 = pow(spiralColor2, vec3(0.75));
+            
+            // Mix spiral colors
+            color = mix(spiralColor1, spiralColor2, spiral * spiral2);
+            
+            // Depth effect in spiral
+            float depth = sin(dist * 20.0 - time + audioEffect * 10.0) * 0.5 + 0.5;
+            color *= depth * 1.5;
+            
+            // Add colorful rings
+            float rings = sin(dist * 50.0 - time * 3.0 + audioEffect * 20.0) * 0.5 + 0.5;
+            color = mix(color, vec3(rings, rings*0.5, 1.0-rings) * 1.5, 0.4);
+          }
+          
+          // Simulate multiple instances
+          float instances = max(1.0, uInstances);
+          float instEff = mod(iter/uDetail * instances, 1.0);
+          
+          // Fluorescence effect - as if glowing under UV
+          color = mix(color, color * color, 0.3);
+          
+          // Colorful glow with audio boost
+          float glow = sin(time * 2.0) * 0.5 + 0.5 + audioEffect * 0.5;
+          color += vec3(0.1, 0.05, 0.2) * glow;
+          
+          // Increase overall brightness in response to audio
+          color *= 1.0 + audioEffect * 0.5;
+          
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `;
+
+      // Shader compilation
+      function compileShader(gl, source, type) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+          console.log("Shader code:", source);
+          gl.deleteShader(shader);
+          return null;
+        }
+        
+        return shader;
+      }
+
+      // Program creation
+      const vertexShader = compileShader(gl, vsSource, gl.VERTEX_SHADER);
+      const fragmentShader = compileShader(gl, fsSource, gl.FRAGMENT_SHADER);
+      
+      if (!vertexShader || !fragmentShader) {
+        console.error('Failed to compile shaders');
+        return;
+      }
+      
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program linking error:', gl.getProgramInfoLog(program));
+        return;
+      }
+
+      // Geometry
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      const positions = [
+        -1.0, -1.0,
+         1.0, -1.0,
+        -1.0,  1.0,
+         1.0,  1.0
+      ];
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+      // Attributes and uniforms
+      const positionAttributeLocation = gl.getAttribLocation(program, 'aPosition');
+      const timeUniformLocation = gl.getUniformLocation(program, 'uTime');
+      const zoomUniformLocation = gl.getUniformLocation(program, 'uZoom');
+      const detailUniformLocation = gl.getUniformLocation(program, 'uDetail');
+      const powerUniformLocation = gl.getUniformLocation(program, 'uPower');
+      const colorScaleUniformLocation = gl.getUniformLocation(program, 'uColorScale');
+      const resolutionUniformLocation = gl.getUniformLocation(program, 'uResolution');
+      const metallicUniformLocation = gl.getUniformLocation(program, 'uMetallic');
+      const instancesUniformLocation = gl.getUniformLocation(program, 'uInstances');
+      const audioVolumeUniformLocation = gl.getUniformLocation(program, 'uAudioVolume');
+      const audioReactivityUniformLocation = gl.getUniformLocation(program, 'uAudioReactivity');
+      const spiralFactorUniformLocation = gl.getUniformLocation(program, 'uSpiralFactor');
+      const beatDetectedUniformLocation = gl.getUniformLocation(program, 'uBeatDetected');
+      const beatModeUniformLocation = gl.getUniformLocation(program, 'uBeatMode');
+      const colorReactivityUniformLocation = gl.getUniformLocation(program, 'uColorReactivity');
+      const colorPaletteUniformLocation = gl.getUniformLocation(program, 'uColorPalette');
+
+      // Controls initialization
+      function initControls() {
+        // Get references to DOM elements
+        const controls = {
+          zoom: { slider: document.getElementById('zoom'), value: document.getElementById('zoomValue') },
+          detail: { slider: document.getElementById('detail'), value: document.getElementById('detailValue') },
+          power: { slider: document.getElementById('power'), value: document.getElementById('powerValue') },
+          speed: { slider: document.getElementById('speed'), value: document.getElementById('speedValue') },
+          colorScale: { slider: document.getElementById('colorScale'), value: document.getElementById('colorScaleValue') },
+          metallic: { slider: document.getElementById('metallic'), value: document.getElementById('metallicValue') },
+          instances: { slider: document.getElementById('instances'), value: document.getElementById('instancesValue') },
+          audioReactivity: { slider: document.getElementById('audioReactivity'), value: document.getElementById('audioReactivityValue') },
+          spiralfactor: { slider: document.getElementById('spiralfactor'), value: document.getElementById('spiralfactorValue') }
+        };
+        
+        // Add event listeners for all sliders
+        Object.keys(controls).forEach(key => {
+          const control = controls[key];
+          if (control.slider && control.value) {
+            control.value.textContent = control.slider.value;
+            control.slider.addEventListener('input', () => {
+              control.value.textContent = control.slider.value;
+              if (key === 'audioReactivity') {
+                audioReactivity = parseFloat(control.slider.value);
+              }
+            });
+          }
+        });
+        
+        return controls;
+      }
+      
+      const controls = initControls();
+
+// Add this function after the initControls function
+// FUNCTION TO MAKE PRESETS WORK
+function applyPreset(preset) {
+  // Values for each preset - customized for greater visual variety
+  const presets = {
+    'hypnotoad': {
+      zoom: 1.2,
+      detail: 80, 
+      power: 2.5,
+      speed: 0.3,
+      colorScale: 2.0,
+      metallic: 0.8,
+      instances: 15,
+      audioReactivity: 0.8,
+      spiralfactor: 0.9,
+      angleChange: 0.3,
+      centerVortex: 0.9,
+      colorReact: 0.7,
+      colorPalette: 'rainbow',
+      zoomBeats: true,
+      angleBeat: true
+    },
+    'dubstep': {
+      zoom: 2.5,
+      detail: 100,
+      power: 3.5,
+      speed: 0.5,
+      colorScale: 3.0,
+      metallic: 0.6,
+      instances: 8,
+      audioReactivity: 0.75,
+      spiralfactor: 0.7,
+      angleChange: 0.5,
+      centerVortex: 0.65,
+      colorReact: 0.9,
+      colorPalette: 'neon',
+      zoomBeats: true,
+      angleBeat: true
+    },
+    'acid': {
+      zoom: 1.8,
+      detail: 100,
+      power: 7.5,
+      speed: 0.4,
+      colorScale: 4.0,
+      metallic: 0.9,
+      instances: 12,
+      audioReactivity: 0.6,
+      spiralfactor: 1.0,
+      angleChange: 0.8,
+      centerVortex: 0.7,
+      colorReact: 0.8,
+      colorPalette: 'rainbow',
+      zoomBeats: false,
+      angleBeat: true
+    },
+    'psychout': {
+      zoom: 0.8,
+      detail: 90,
+      power: 6.0,
+      speed: 0.9,
+      colorScale: 5.0,
+      metallic: 0.3,
+      instances: 19,
+      audioReactivity: 0.9,
+      spiralfactor: 0.8,
+      angleChange: 1.0,
+      centerVortex: 1.0,
+      colorReact: 1.0,
+      colorPalette: 'psytrance',
+      zoomBeats: true,
+      angleBeat: false
+    },
+    'vortex': {
+      zoom: 2.5,
+      detail: 80,
+      power: 3.5,
+      speed: 0.6,
+      colorScale: 2.5,
+      metallic: 0.5,
+      instances: 10,
+      audioReactivity: 0.7,
+      spiralfactor: 0.6,
+      angleChange: 0.4,
+      centerVortex: 0.8,
+      colorReact: 0.6,
+      colorPalette: 'mandelbrot',
+      zoomBeats: false,
+      angleBeat: false
+    },
+    'dmt': {
+      zoom: 1.5,
+      detail: 120,
+      power: 7.5,
+      speed: 0.6,
+      colorScale: 3.5,
+      metallic: 0.8,
+      instances: 13,
+      audioReactivity: 0.65,
+      spiralfactor: 0.85,
+      angleChange: 0.7,
+      centerVortex: 0.8,
+      colorReact: 0.9,
+      colorPalette: 'burning',
+      zoomBeats: true,
+      angleBeat: true
+    }
+  };
+  
+  // Get the selected preset
+  const settings = presets[preset];
+  if (!settings) {
+    console.error("Unknown preset:", preset);
+    return;
+  }
+  
+  // Apply preset with error handling
+  try {
+    console.log("Starting preset application for: " + preset);
+    
+    // First update the global state variables directly
+    if (settings.colorPalette) {
+      selectedPalette = settings.colorPalette;
+      console.log("Set selectedPalette to:", selectedPalette);
+    }
+    
+    if (settings.zoomBeats !== undefined) {
+      zoomBeatsEnabled = settings.zoomBeats;
+      console.log("Set zoomBeatsEnabled to:", zoomBeatsEnabled);
+    }
+    
+    if (settings.audioReactivity !== undefined) {
+      audioReactivity = settings.audioReactivity;
+      console.log("Set audioReactivity to:", audioReactivity);
+    }
+    
+    if (settings.colorReact !== undefined) {
+      colorReactivity = settings.colorReact;
+      console.log("Set colorReactivity to:", colorReactivity);
+    }
+    
+    // Now update the UI to match
+    Object.keys(settings).forEach(key => {
+      try {
+        // Handle different types of controls
+        if (key === 'colorPalette') {
+          const select = document.getElementById('colorPalette');
+          if (select) {
+            select.value = settings[key];
+            console.log("Updated color palette to: " + settings[key]);
+          }
+        } 
+        else if (key === 'zoomBeats') {
+          const checkbox = document.getElementById('zoomBeats');
+          if (checkbox) {
+            checkbox.checked = settings[key];
+            console.log("Updated zoom beats to: " + settings[key]);
+          }
+        }
+        else if (key === 'angleBeat') {
+          const checkbox = document.getElementById('angleBeat');
+          if (checkbox) {
+            checkbox.checked = settings[key];
+            console.log("Updated angle beat to: " + settings[key]);
+          }
+        }
+        else {
+          // Handle sliders
+          const control = document.getElementById(key);
+          const valueDisplay = document.getElementById(key + 'Value');
+          
+          if (control) {
+            control.value = settings[key];
+            console.log("Updated " + key + " to: " + settings[key]);
+            
+            if (valueDisplay) {
+              valueDisplay.textContent = settings[key];
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error setting " + key + ": " + err.message);
+      }
+    });
+    
+    console.log("Preset applied successfully!");
+  } catch (err) {
+    console.error("Failed to apply preset: " + err.message);
+  }
+}
+
+// ADD THIS CODE after the initControls function call
+// Hook up preset buttons to apply the presets
+const presetButtons = document.querySelectorAll('.preset-btn');
+presetButtons.forEach(button => {
+  button.addEventListener('click', function() {
+    const preset = this.getAttribute('data-preset');
+    console.log("Preset button clicked:", preset);
+    applyPreset(preset);
+  });
+});
+
+      // Function to read slider values
+      function getSliderValue(control, defaultValue) {
+        return control && control.slider ? parseFloat(control.slider.value) : defaultValue;
+      }
+
+      // Function to resize canvas
+      function resizeCanvas() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+          gl.viewport(0, 0, width, height);
+        }
+      }
+
+      // Start time
+      const startTime = Date.now();
+      
+      // Main rendering loop
+      function render() {
+        // Update size
+        resizeCanvas();
+        
+        // Settings
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        
+        // Use program
+        gl.useProgram(program);
+        
+        // Position
+        gl.enableVertexAttribArray(positionAttributeLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+        
+        // Audio analysis
+        let currentAudioVolume = analyzeAudio();
+        
+        // Time and other parameters
+        const currentTime = Date.now();
+        const speedValue = getSliderValue(controls.speed, 0.5);
+        const time = (currentTime - startTime) * speedValue * 0.001;
+        
+        gl.uniform1f(timeUniformLocation, time);
+        gl.uniform1f(zoomUniformLocation, getSliderValue(controls.zoom, 2.0));
+        gl.uniform1f(detailUniformLocation, getSliderValue(controls.detail, 100));
+        gl.uniform1f(powerUniformLocation, getSliderValue(controls.power, 8.0));
+        gl.uniform1f(colorScaleUniformLocation, getSliderValue(controls.colorScale, 1.0));
+        gl.uniform1f(metallicUniformLocation, getSliderValue(controls.metallic, 0.5));
+        gl.uniform1f(instancesUniformLocation, getSliderValue(controls.instances, 8));
+        gl.uniform1f(audioVolumeUniformLocation, currentAudioVolume);
+        gl.uniform1f(audioReactivityUniformLocation, audioReactivity);
+        gl.uniform1f(spiralFactorUniformLocation, getSliderValue(controls.spiralfactor, 0.5));
+        gl.uniform1f(beatDetectedUniformLocation, beatDetected ? 1.0 : 0.0);
+        gl.uniform1f(beatModeUniformLocation, zoomBeatsEnabled ? 1.0 : 0.0);
+        gl.uniform1f(colorReactivityUniformLocation, colorReactivity);
+        
+        // Convert palette name to integer index
+        let paletteIndex = 0; // default: psytrance
+        switch(selectedPalette) {
+          case "psytrance": paletteIndex = 0; break;
+          case "mandelbrot": paletteIndex = 1; break;
+          case "burning": paletteIndex = 2; break;
+          case "julia": paletteIndex = 3; break;
+          case "rainbow": paletteIndex = 4; break;
+          case "neon": paletteIndex = 5; break;
+        }
+        gl.uniform1i(colorPaletteUniformLocation, paletteIndex);
+        gl.uniform2f(resolutionUniformLocation, canvas.width, canvas.height);
+        
+        // Drawing
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        
+        // Continue animation
+        requestAnimationFrame(render);
+      }
+
+      // Start rendering loop
+      render();
+    });
+  </script>
+</body>
+</html>
