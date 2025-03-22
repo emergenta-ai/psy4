@@ -299,8 +299,8 @@
 // This should be added right after initializing your variables in the DOMContentLoaded event listener
 
 // Define audio processing constants globally
-const BEAT_THRESHOLD = 0.15;
-const BEAT_MIN_INTERVAL = 100; // ms
+const BEAT_THRESHOLD = 0.1;
+const BEAT_MIN_INTERVAL = 125; // ms
 let lastBeatTime = 0;
 
 // Function to analyze audio data (with fixed reference to constants)
@@ -452,7 +452,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let angleBeatEnabled = true; // Default from Burning Ship Extreme
   
   // === DEFAULT VALUES FOR BURNING SHIP EXTREME ===
-  let defaultZoom = 3.6;
+  let defaultZoom = 2.6;
   let defaultDetail = 10;
   let defaultPower = 1.0;
   let defaultSpeed = 2.0;
