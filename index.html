@@ -32,6 +32,36 @@
       box-shadow: 0 0 15px #00ff99, inset 0 0 10px rgba(0, 255, 153, 0.3);
       max-height: 95vh;
       overflow-y: auto;
+      transition: transform 0.3s ease-in-out;
+      max-width: 90vw;
+    }
+    .controls.hidden {
+      transform: translateX(-100%);
+    }
+    .toggle-controls {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: linear-gradient(to right, #ff00ff, #00ffff);
+      border: none;
+      color: #000;
+      padding: 10px;
+      border-radius: 50%;
+      font-weight: bold;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      box-shadow: 0 0 10px rgba(255, 0, 255, 0.7);
+      transition: all 0.3s;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .toggle-controls:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px rgba(255, 0, 255, 1);
     }
     .slider-container {
       margin: 5px 0;
@@ -120,11 +150,38 @@
       color: #fff;
       text-shadow: 0 0 2px #000;
     }
+    /* Mobile-specific styles */
+    @media (max-width: 768px) {
+      .controls {
+        width: 85vw;
+        max-height: 85vh;
+        font-size: 14px;
+      }
+      .slider-container {
+        margin: 3px 0;
+      }
+      label {
+        width: 100px;
+        font-size: 12px;
+      }
+      .controls.hidden {
+        transform: translateX(-110%);
+      }
+      .toggle-controls {
+        width: 40px;
+        height: 40px;
+        font-size: 14px;
+      }
+    }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
-        <div class="controls">
+  
+  <!-- Toggle button for showing/hiding controls -->
+  <button id="toggleControls" class="toggle-controls">≡</button>
+  
+  <div id="controlPanel" class="controls">
     <h2 style="margin-top: 0; text-align: center; color: #ff00ff; text-shadow: 0 0 5px #ff00ff;">PsyTrance Fractal</h2>
     <div class="audio-enable">
       <button id="audioEnable" class="audio-btn">Enable Audio Reactive Mode</button>
@@ -237,6 +294,20 @@
   <script>
     // Wait for DOM to fully load
     document.addEventListener('DOMContentLoaded', function() {
+      // Controls toggle functionality
+      const toggleButton = document.getElementById('toggleControls');
+      const controlPanel = document.getElementById('controlPanel');
+      
+      // Initially hide controls on mobile devices
+      if (window.innerWidth <= 768) {
+        controlPanel.classList.add('hidden');
+      }
+      
+      toggleButton.addEventListener('click', function() {
+        controlPanel.classList.toggle('hidden');
+        toggleButton.textContent = controlPanel.classList.contains('hidden') ? '≡' : '×';
+      });
+      
       // Initialize WebGL
       const canvas = document.getElementById('canvas');
       if (!canvas) {
@@ -266,6 +337,7 @@
       let volumeHistory = Array(8).fill(0);
       let beatHistory = Array(8).fill(false);
       let selectedPalette = "psytrance";
+      let angleBeatEnabled = false;
       
       // Beat detection thresholds
       const BEAT_THRESHOLD = 0.15;
@@ -320,6 +392,11 @@
       // Zoom beat mode toggle
       document.getElementById('zoomBeats').addEventListener('change', function() {
         zoomBeatsEnabled = this.checked;
+      });
+      
+      // Angle beat mode toggle
+      document.getElementById('angleBeat').addEventListener('change', function() {
+        angleBeatEnabled = this.checked;
       });
       
       // Color palette selector
@@ -609,12 +686,26 @@
             // This creates the changing angle effect every 1-2 seconds
             float angleModulation = sin(time * 0.5) * 2.0 * 3.14159 * (1.0 + audioEffect * 3.0);
             float angleOffset = time * 0.2 + audioEffect * 5.0; // Makes it rotate with audio
+            
+            // Apply angle beat effect if enabled
+            if (uAngleBeat > 0.5 && uBeatDetected > 0.5) {
+              // Sharp angle change on beat
+              angleModulation += 3.14159 * 0.5 * uAudioReactivity;
+            }
+            
             float angle = atan(uv.y, uv.x) + angleModulation + angleOffset;
+            
+            // Add angle change speed based on slider
+            angle += time * uAngleChange * 2.0;
             
             // Super detailed hypnotic spiral in center
             float spiralFreq = 40.0 * (1.0 + audioEffect * 3.0);
             float spiral = sin(angle * uInstances + dist * spiralFreq - time * 4.0) * 0.5 + 0.5;
             float spiral2 = cos(angle * (uInstances * 0.7) - dist * spiralFreq * 1.8 + time * 5.0) * 0.5 + 0.5;
+            
+            // Center vortex effect - stronger with slider value
+            float vortexStrength = uCenterVortex * (1.0 + audioEffect * 3.0);
+            spiral = mix(spiral, sin(dist * 30.0 - time * 6.0) * 0.5 + 0.5, vortexStrength);
             
             // Rainbow spiral effect with audio reactivity
             float rainbowSpeed = 2.0 + audioEffect * 4.0;
@@ -732,6 +823,9 @@
       const beatModeUniformLocation = gl.getUniformLocation(program, 'uBeatMode');
       const colorReactivityUniformLocation = gl.getUniformLocation(program, 'uColorReactivity');
       const colorPaletteUniformLocation = gl.getUniformLocation(program, 'uColorPalette');
+      const angleChangeUniformLocation = gl.getUniformLocation(program, 'uAngleChange');
+      const centerVortexUniformLocation = gl.getUniformLocation(program, 'uCenterVortex');
+      const angleBeatUniformLocation = gl.getUniformLocation(program, 'uAngleBeat');
 
       // Controls initialization
       function initControls() {
@@ -745,7 +839,10 @@
           metallic: { slider: document.getElementById('metallic'), value: document.getElementById('metallicValue') },
           instances: { slider: document.getElementById('instances'), value: document.getElementById('instancesValue') },
           audioReactivity: { slider: document.getElementById('audioReactivity'), value: document.getElementById('audioReactivityValue') },
-          spiralfactor: { slider: document.getElementById('spiralfactor'), value: document.getElementById('spiralfactorValue') }
+          spiralfactor: { slider: document.getElementById('spiralfactor'), value: document.getElementById('spiralfactorValue') },
+          angleChange: { slider: document.getElementById('angleChange'), value: document.getElementById('angleChangeValue') },
+          centerVortex: { slider: document.getElementById('centerVortex'), value: document.getElementById('centerVortexValue') },
+          colorReact: { slider: document.getElementById('colorReact'), value: document.getElementById('colorReactValue') }
         };
         
         // Add event listeners for all sliders
@@ -757,6 +854,8 @@
               control.value.textContent = control.slider.value;
               if (key === 'audioReactivity') {
                 audioReactivity = parseFloat(control.slider.value);
+              } else if (key === 'colorReact') {
+                colorReactivity = parseFloat(control.slider.value);
               }
             });
           }
@@ -767,207 +866,210 @@
       
       const controls = initControls();
 
-// Add this function after the initControls function
-// FUNCTION TO MAKE PRESETS WORK
-function applyPreset(preset) {
-  // Values for each preset - customized for greater visual variety
-  const presets = {
-    'hypnotoad': {
-      zoom: 1.2,
-      detail: 80, 
-      power: 2.5,
-      speed: 0.3,
-      colorScale: 2.0,
-      metallic: 0.8,
-      instances: 15,
-      audioReactivity: 0.8,
-      spiralfactor: 0.9,
-      angleChange: 0.3,
-      centerVortex: 0.9,
-      colorReact: 0.7,
-      colorPalette: 'rainbow',
-      zoomBeats: true,
-      angleBeat: true
-    },
-    'dubstep': {
-      zoom: 2.5,
-      detail: 100,
-      power: 3.5,
-      speed: 0.5,
-      colorScale: 3.0,
-      metallic: 0.6,
-      instances: 8,
-      audioReactivity: 0.75,
-      spiralfactor: 0.7,
-      angleChange: 0.5,
-      centerVortex: 0.65,
-      colorReact: 0.9,
-      colorPalette: 'neon',
-      zoomBeats: true,
-      angleBeat: true
-    },
-    'acid': {
-      zoom: 1.8,
-      detail: 100,
-      power: 7.5,
-      speed: 0.4,
-      colorScale: 4.0,
-      metallic: 0.9,
-      instances: 12,
-      audioReactivity: 0.6,
-      spiralfactor: 1.0,
-      angleChange: 0.8,
-      centerVortex: 0.7,
-      colorReact: 0.8,
-      colorPalette: 'rainbow',
-      zoomBeats: false,
-      angleBeat: true
-    },
-    'psychout': {
-      zoom: 0.8,
-      detail: 90,
-      power: 6.0,
-      speed: 0.9,
-      colorScale: 5.0,
-      metallic: 0.3,
-      instances: 19,
-      audioReactivity: 0.9,
-      spiralfactor: 0.8,
-      angleChange: 1.0,
-      centerVortex: 1.0,
-      colorReact: 1.0,
-      colorPalette: 'psytrance',
-      zoomBeats: true,
-      angleBeat: false
-    },
-    'vortex': {
-      zoom: 2.5,
-      detail: 80,
-      power: 3.5,
-      speed: 0.6,
-      colorScale: 2.5,
-      metallic: 0.5,
-      instances: 10,
-      audioReactivity: 0.7,
-      spiralfactor: 0.6,
-      angleChange: 0.4,
-      centerVortex: 0.8,
-      colorReact: 0.6,
-      colorPalette: 'mandelbrot',
-      zoomBeats: false,
-      angleBeat: false
-    },
-    'dmt': {
-      zoom: 1.5,
-      detail: 120,
-      power: 7.5,
-      speed: 0.6,
-      colorScale: 3.5,
-      metallic: 0.8,
-      instances: 13,
-      audioReactivity: 0.65,
-      spiralfactor: 0.85,
-      angleChange: 0.7,
-      centerVortex: 0.8,
-      colorReact: 0.9,
-      colorPalette: 'burning',
-      zoomBeats: true,
-      angleBeat: true
-    }
-  };
-  
-  // Get the selected preset
-  const settings = presets[preset];
-  if (!settings) {
-    console.error("Unknown preset:", preset);
-    return;
-  }
-  
-  // Apply preset with error handling
-  try {
-    console.log("Starting preset application for: " + preset);
-    
-    // First update the global state variables directly
-    if (settings.colorPalette) {
-      selectedPalette = settings.colorPalette;
-      console.log("Set selectedPalette to:", selectedPalette);
-    }
-    
-    if (settings.zoomBeats !== undefined) {
-      zoomBeatsEnabled = settings.zoomBeats;
-      console.log("Set zoomBeatsEnabled to:", zoomBeatsEnabled);
-    }
-    
-    if (settings.audioReactivity !== undefined) {
-      audioReactivity = settings.audioReactivity;
-      console.log("Set audioReactivity to:", audioReactivity);
-    }
-    
-    if (settings.colorReact !== undefined) {
-      colorReactivity = settings.colorReact;
-      console.log("Set colorReactivity to:", colorReactivity);
-    }
-    
-    // Now update the UI to match
-    Object.keys(settings).forEach(key => {
-      try {
-        // Handle different types of controls
-        if (key === 'colorPalette') {
-          const select = document.getElementById('colorPalette');
-          if (select) {
-            select.value = settings[key];
-            console.log("Updated color palette to: " + settings[key]);
+      // Preset functionality 
+      function applyPreset(preset) {
+        // Values for each preset - customized for greater visual variety
+        const presets = {
+          'hypnotoad': {
+            zoom: 1.2,
+            detail: 80, 
+            power: 2.5,
+            speed: 0.3,
+            colorScale: 2.0,
+            metallic: 0.8,
+            instances: 15,
+            audioReactivity: 0.8,
+            spiralfactor: 0.9,
+            angleChange: 0.3,
+            centerVortex: 0.9,
+            colorReact: 0.7,
+            colorPalette: 'rainbow',
+            zoomBeats: true,
+            angleBeat: true
+          },
+          'dubstep': {
+            zoom: 2.5,
+            detail: 100,
+            power: 3.5,
+            speed: 0.5,
+            colorScale: 3.0,
+            metallic: 0.6,
+            instances: 8,
+            audioReactivity: 0.75,
+            spiralfactor: 0.7,
+            angleChange: 0.5,
+            centerVortex: 0.65,
+            colorReact: 0.9,
+            colorPalette: 'neon',
+            zoomBeats: true,
+            angleBeat: true
+          },
+          'acid': {
+            zoom: 1.8,
+            detail: 100,
+            power: 7.5,
+            speed: 0.4,
+            colorScale: 4.0,
+            metallic: 0.9,
+            instances: 12,
+            audioReactivity: 0.6,
+            spiralfactor: 1.0,
+            angleChange: 0.8,
+            centerVortex: 0.7,
+            colorReact: 0.8,
+            colorPalette: 'rainbow',
+            zoomBeats: false,
+            angleBeat: true
+          },
+          'psychout': {
+            zoom: 0.8,
+            detail: 90,
+            power: 6.0,
+            speed: 0.9,
+            colorScale: 5.0,
+            metallic: 0.3,
+            instances: 19,
+            audioReactivity: 0.9,
+            spiralfactor: 0.8,
+            angleChange: 1.0,
+            centerVortex: 1.0,
+            colorReact: 1.0,
+            colorPalette: 'psytrance',
+            zoomBeats: true,
+            angleBeat: false
+          },
+          'vortex': {
+            zoom: 2.5,
+            detail: 80,
+            power: 3.5,
+            speed: 0.6,
+            colorScale: 2.5,
+            metallic: 0.5,
+            instances: 10,
+            audioReactivity: 0.7,
+            spiralfactor: 0.6,
+            angleChange: 0.4,
+            centerVortex: 0.8,
+            colorReact: 0.6,
+            colorPalette: 'mandelbrot',
+            zoomBeats: false,
+            angleBeat: false
+          },
+          'dmt': {
+            zoom: 1.5,
+            detail: 120,
+            power: 7.5,
+            speed: 0.6,
+            colorScale: 3.5,
+            metallic: 0.8,
+            instances: 13,
+            audioReactivity: 0.65,
+            spiralfactor: 0.85,
+            angleChange: 0.7,
+            centerVortex: 0.8,
+            colorReact: 0.9,
+            colorPalette: 'burning',
+            zoomBeats: true,
+            angleBeat: true
           }
-        } 
-        else if (key === 'zoomBeats') {
-          const checkbox = document.getElementById('zoomBeats');
-          if (checkbox) {
-            checkbox.checked = settings[key];
-            console.log("Updated zoom beats to: " + settings[key]);
-          }
+        };
+        
+        // Get the selected preset
+        const settings = presets[preset];
+        if (!settings) {
+          console.error("Unknown preset:", preset);
+          return;
         }
-        else if (key === 'angleBeat') {
-          const checkbox = document.getElementById('angleBeat');
-          if (checkbox) {
-            checkbox.checked = settings[key];
-            console.log("Updated angle beat to: " + settings[key]);
-          }
-        }
-        else {
-          // Handle sliders
-          const control = document.getElementById(key);
-          const valueDisplay = document.getElementById(key + 'Value');
+        
+        // Apply preset with error handling
+        try {
+          console.log("Starting preset application for: " + preset);
           
-          if (control) {
-            control.value = settings[key];
-            console.log("Updated " + key + " to: " + settings[key]);
-            
-            if (valueDisplay) {
-              valueDisplay.textContent = settings[key];
-            }
+          // First update the global state variables directly
+          if (settings.colorPalette) {
+            selectedPalette = settings.colorPalette;
+            console.log("Set selectedPalette to:", selectedPalette);
           }
+          
+          if (settings.zoomBeats !== undefined) {
+            zoomBeatsEnabled = settings.zoomBeats;
+            console.log("Set zoomBeatsEnabled to:", zoomBeatsEnabled);
+          }
+          
+          if (settings.audioReactivity !== undefined) {
+            audioReactivity = settings.audioReactivity;
+            console.log("Set audioReactivity to:", audioReactivity);
+          }
+          
+          if (settings.colorReact !== undefined) {
+            colorReactivity = settings.colorReact;
+            console.log("Set colorReactivity to:", colorReactivity);
+          }
+          
+          if (settings.angleBeat !== undefined) {
+            angleBeatEnabled = settings.angleBeat;
+            console.log("Set angleBeatEnabled to:", angleBeatEnabled);
+          }
+          
+          // Now update the UI to match
+          Object.keys(settings).forEach(key => {
+            try {
+              // Handle different types of controls
+              if (key === 'colorPalette') {
+                const select = document.getElementById('colorPalette');
+                if (select) {
+                  select.value = settings[key];
+                  console.log("Updated color palette to: " + settings[key]);
+                }
+              } 
+              else if (key === 'zoomBeats') {
+                const checkbox = document.getElementById('zoomBeats');
+                if (checkbox) {
+                  checkbox.checked = settings[key];
+                  console.log("Updated zoom beats to: " + settings[key]);
+                }
+              }
+              else if (key === 'angleBeat') {
+                const checkbox = document.getElementById('angleBeat');
+                if (checkbox) {
+                  checkbox.checked = settings[key];
+                  console.log("Updated angle beat to: " + settings[key]);
+                }
+              }
+              else {
+                // Handle sliders
+                const control = document.getElementById(key);
+                const valueDisplay = document.getElementById(key + 'Value');
+                
+                if (control) {
+                  control.value = settings[key];
+                  console.log("Updated " + key + " to: " + settings[key]);
+                  
+                  if (valueDisplay) {
+                    valueDisplay.textContent = settings[key];
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Error setting " + key + ": " + err.message);
+            }
+          });
+          
+          console.log("Preset applied successfully!");
+        } catch (err) {
+          console.error("Failed to apply preset: " + err.message);
         }
-      } catch (err) {
-        console.error("Error setting " + key + ": " + err.message);
       }
-    });
-    
-    console.log("Preset applied successfully!");
-  } catch (err) {
-    console.error("Failed to apply preset: " + err.message);
-  }
-}
 
-// ADD THIS CODE after the initControls function call
-// Hook up preset buttons to apply the presets
-const presetButtons = document.querySelectorAll('.preset-btn');
-presetButtons.forEach(button => {
-  button.addEventListener('click', function() {
-    const preset = this.getAttribute('data-preset');
-    console.log("Preset button clicked:", preset);
-    applyPreset(preset);
-  });
-});
+      // Hook up preset buttons
+      const presetButtons = document.querySelectorAll('.preset-btn');
+      presetButtons.forEach(button => {
+        button.addEventListener('click', function() {
+          const preset = this.getAttribute('data-preset');
+          console.log("Preset button clicked:", preset);
+          applyPreset(preset);
+        });
+      });
 
       // Function to read slider values
       function getSliderValue(control, defaultValue) {
@@ -1027,6 +1129,9 @@ presetButtons.forEach(button => {
         gl.uniform1f(beatDetectedUniformLocation, beatDetected ? 1.0 : 0.0);
         gl.uniform1f(beatModeUniformLocation, zoomBeatsEnabled ? 1.0 : 0.0);
         gl.uniform1f(colorReactivityUniformLocation, colorReactivity);
+        gl.uniform1f(angleChangeUniformLocation, getSliderValue(controls.angleChange, 0.5));
+        gl.uniform1f(centerVortexUniformLocation, getSliderValue(controls.centerVortex, 0.7));
+        gl.uniform1f(angleBeatUniformLocation, angleBeatEnabled ? 1.0 : 0.0);
         
         // Convert palette name to integer index
         let paletteIndex = 0; // default: psytrance
@@ -1037,6 +1142,10 @@ presetButtons.forEach(button => {
           case "julia": paletteIndex = 3; break;
           case "rainbow": paletteIndex = 4; break;
           case "neon": paletteIndex = 5; break;
+          case "cyberpunk": paletteIndex = 6; break;
+          case "vaporwave": paletteIndex = 7; break;
+          case "synthwave": paletteIndex = 8; break;
+          case "hyperspace": paletteIndex = 9; break;
         }
         gl.uniform1i(colorPaletteUniformLocation, paletteIndex);
         gl.uniform2f(resolutionUniformLocation, canvas.width, canvas.height);
