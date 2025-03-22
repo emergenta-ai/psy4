@@ -293,86 +293,120 @@
 
   <script>
     // Wait for DOM to fully load
-    document.addEventListener('DOMContentLoaded', function() {
-      // Controls toggle functionality
-      const toggleButton = document.getElementById('toggleControls');
-      const controlPanel = document.getElementById('controlPanel');
-      
-      // Initially hide controls on mobile devices
-      if (window.innerWidth <= 768) {
-        controlPanel.classList.add('hidden');
-      }
-      
-      toggleButton.addEventListener('click', function() {
-        controlPanel.classList.toggle('hidden');
-        toggleButton.textContent = controlPanel.classList.contains('hidden') ? '≡' : '×';
-      });
-      
-      // Initialize WebGL
-      const canvas = document.getElementById('canvas');
-      if (!canvas) {
-        console.error('Cannot find canvas element');
-        return;
-      }
-      
-      const gl = canvas.getContext('webgl');
-      if (!gl) {
-        console.error('WebGL is not supported by your browser!');
-        return;
-      }
-      
-      // ===== AUDIO ANALYZER SETUP =====
-      let audioContext;
-      let analyser;
-      let microphone;
-      let audioEnabled = false;
-      let audioDataArray;
-      let audioVolume = 0;
-      let audioReactivity = 0.5;
-      let colorReactivity = 0.5;
-      let zoomBeatsEnabled = false;
-      let beatDetected = false;
-      let lastVolume = 0;
-      let volumeDelta = 0;
-      let volumeHistory = Array(8).fill(0);
-      let beatHistory = Array(8).fill(false);
-      let selectedPalette = "psytrance";
-      let angleBeatEnabled = false;
-      
-      // Beat detection thresholds
-      const BEAT_THRESHOLD = 0.15;
-      const BEAT_MIN_INTERVAL = 100; // ms
-      let lastBeatTime = 0;
-      
-      // Function to start audio analysis
-      function setupAudio() {
-        try {
-          // Create audio context
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          analyser = audioContext.createAnalyser();
-          
-          // Configure analyzer
-          analyser.fftSize = 256;
-          audioDataArray = new Uint8Array(analyser.frequencyBinCount);
-          
-          // Connect microphone
-          navigator.mediaDevices.getUserMedia({audio: true})
-            .then(function(stream) {
-              microphone = audioContext.createMediaStreamSource(stream);
-              microphone.connect(analyser);
-              audioEnabled = true;
-              document.getElementById('audioEnable').textContent = 'Audio Reactive Mode Enabled!';
-              document.getElementById('audioEnable').style.background = 'linear-gradient(to right, #00ff99, #ff00ff)';
-            })
-            .catch(function(err) {
-              console.error('Microphone access error:', err);
-              alert('Cannot access microphone. Check permissions.');
-            });
-        } catch (e) {
-          console.error('Audio API initialization error:', e);
-          alert('Your browser does not support Web Audio API.');
-        }
-      }
+// Add this code to your HTML file, replacing the existing initialization in the DOMContentLoaded event
+// This makes the Burning Ship Extreme preset load automatically
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Controls toggle functionality
+  const toggleButton = document.getElementById('toggleControls');
+  const controlPanel = document.getElementById('controlPanel');
+  
+  // Initially hide controls on mobile devices
+  if (window.innerWidth <= 768) {
+    controlPanel.classList.add('hidden');
+  }
+  
+  toggleButton.addEventListener('click', function() {
+    controlPanel.classList.toggle('hidden');
+    toggleButton.textContent = controlPanel.classList.contains('hidden') ? '≡' : '×';
+  });
+  
+  // Initialize WebGL
+  const canvas = document.getElementById('canvas');
+  if (!canvas) {
+    console.error('Cannot find canvas element');
+    return;
+  }
+  
+  const gl = canvas.getContext('webgl');
+  if (!gl) {
+    console.error('WebGL is not supported by your browser!');
+    return;
+  }
+  
+  // ===== AUDIO ANALYZER SETUP =====
+  let audioContext;
+  let analyser;
+  let microphone;
+  let audioEnabled = false;
+  let audioDataArray;
+  let audioVolume = 0;
+  let audioReactivity = 0.98; // Default from Burning Ship Extreme
+  let colorReactivity = 0.94; // Default from Burning Ship Extreme
+  let zoomBeatsEnabled = true; // Default from Burning Ship Extreme
+  let beatDetected = false;
+  let lastVolume = 0;
+  let volumeDelta = 0;
+  let volumeHistory = Array(8).fill(0);
+  let beatHistory = Array(8).fill(false);
+  let selectedPalette = "burning"; // Default from Burning Ship Extreme
+  let angleBeatEnabled = true; // Default from Burning Ship Extreme
+  
+  // === DEFAULT VALUES FOR BURNING SHIP EXTREME ===
+  let defaultZoom = 3.6;
+  let defaultDetail = 10;
+  let defaultPower = 1.0;
+  let defaultSpeed = 2.0;
+  let defaultColorScale = 3.9;
+  let defaultMetallic = 0.96;
+  let defaultInstances = 10;
+  let defaultSpiralFactor = 1.0;
+  let defaultAngleChange = 0.8;
+  let defaultCenterVortex = 1.0;
+  
+  // Set all UI elements to match default values
+  function setDefaultValues() {
+    // Set sliders to default values
+    document.getElementById('zoom').value = defaultZoom;
+    document.getElementById('zoomValue').textContent = defaultZoom;
+    
+    document.getElementById('detail').value = defaultDetail;
+    document.getElementById('detailValue').textContent = defaultDetail;
+    
+    document.getElementById('power').value = defaultPower;
+    document.getElementById('powerValue').textContent = defaultPower;
+    
+    document.getElementById('speed').value = defaultSpeed;
+    document.getElementById('speedValue').textContent = defaultSpeed;
+    
+    document.getElementById('colorScale').value = defaultColorScale;
+    document.getElementById('colorScaleValue').textContent = defaultColorScale;
+    
+    document.getElementById('metallic').value = defaultMetallic;
+    document.getElementById('metallicValue').textContent = defaultMetallic;
+    
+    document.getElementById('instances').value = defaultInstances;
+    document.getElementById('instancesValue').textContent = defaultInstances;
+    
+    document.getElementById('audioReactivity').value = audioReactivity;
+    document.getElementById('audioReactivityValue').textContent = audioReactivity;
+    
+    document.getElementById('spiralfactor').value = defaultSpiralFactor;
+    document.getElementById('spiralfactorValue').textContent = defaultSpiralFactor;
+    
+    document.getElementById('angleChange').value = defaultAngleChange;
+    document.getElementById('angleChangeValue').textContent = defaultAngleChange;
+    
+    document.getElementById('centerVortex').value = defaultCenterVortex;
+    document.getElementById('centerVortexValue').textContent = defaultCenterVortex;
+    
+    document.getElementById('colorReact').value = colorReactivity;
+    document.getElementById('colorReactValue').textContent = colorReactivity;
+    
+    // Set color palette
+    document.getElementById('colorPalette').value = selectedPalette;
+    
+    // Set checkboxes
+    document.getElementById('zoomBeats').checked = zoomBeatsEnabled;
+    document.getElementById('angleBeat').checked = angleBeatEnabled;
+    
+    console.log("Default values set to Burning Ship Extreme preset");
+  }
+  
+  // Call this function after the page has loaded
+  setDefaultValues();
+  
+
       
       // Audio enable button
       document.getElementById('audioEnable').addEventListener('click', setupAudio);
@@ -404,6 +438,44 @@
         selectedPalette = this.value;
       });
       
+      // Add this function to your code - it was referenced but not defined
+// This should be added just after the audioReactivity and other slider event listeners
+
+// Function to start audio analysis
+function setupAudio() {
+  try {
+    // Create audio context
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    
+    // Configure analyzer
+    analyser.fftSize = 256;
+    audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    // Define beat detection constants that were missing
+    const BEAT_THRESHOLD = 0.15;
+    const BEAT_MIN_INTERVAL = 100; // ms
+    let lastBeatTime = 0;
+    
+    // Connect microphone
+    navigator.mediaDevices.getUserMedia({audio: true})
+      .then(function(stream) {
+        microphone = audioContext.createMediaStreamSource(stream);
+        microphone.connect(analyser);
+        audioEnabled = true;
+        document.getElementById('audioEnable').textContent = 'Audio Reactive Mode Enabled!';
+        document.getElementById('audioEnable').style.background = 'linear-gradient(to right, #00ff99, #ff00ff)';
+      })
+      .catch(function(err) {
+        console.error('Microphone access error:', err);
+        alert('Cannot access microphone. Check permissions.');
+      });
+  } catch (e) {
+    console.error('Audio API initialization error:', e);
+    alert('Your browser does not support Web Audio API.');
+  }
+}
+
       // Function for real-time audio analysis
       function analyzeAudio() {
         if (!audioEnabled || !analyser) return 0;
@@ -1160,6 +1232,127 @@
       // Start rendering loop
       render();
     });
+
+    // This code adds a new preset called "BurningShipExtreme" to your PsyTrance Fractal Visualizer
+// To use it, add this code at the end of your JavaScript section, just before the final closing script tag
+
+// Add this new preset configuration
+function addBurningShipExtreme() {
+  // Add new preset to the presets object
+  const presets = {
+    'burningShipExtreme': {
+      zoom: 3.6,
+      detail: 10,
+      power: 1,
+      speed: 2,
+      colorScale: 3.9,
+      metallic: 0.96,
+      instances: 10,
+      audioReactivity: 0.98,
+      spiralfactor: 1.0,
+      angleChange: 0.8,
+      centerVortex: 1.0,
+      colorReact: 0.94,
+      colorPalette: 'burning',
+      zoomBeats: true,
+      angleBeat: true
+    }
+  };
+  
+  // Create new preset button
+  const presetContainer = document.querySelector('.preset-btn').parentElement;
+  const newButton = document.createElement('button');
+  newButton.className = 'preset-btn';
+  newButton.setAttribute('data-preset', 'burningShipExtreme');
+  newButton.textContent = 'Burning Ship Extreme';
+  
+  // Add button to container
+  presetContainer.appendChild(newButton);
+  
+  // Add click event listener
+  newButton.addEventListener('click', function() {
+    applyCustomPreset('burningShipExtreme', presets.burningShipExtreme);
+  });
+  
+  console.log("Burning Ship Extreme preset added!");
+}
+
+// Function to apply custom preset
+function applyCustomPreset(presetName, settings) {
+  console.log("Applying custom preset:", presetName);
+  
+  try {
+    // Update global state variables
+    if (settings.colorPalette) {
+      selectedPalette = settings.colorPalette;
+    }
+    
+    if (settings.zoomBeats !== undefined) {
+      zoomBeatsEnabled = settings.zoomBeats;
+    }
+    
+    if (settings.audioReactivity !== undefined) {
+      audioReactivity = settings.audioReactivity;
+    }
+    
+    if (settings.colorReact !== undefined) {
+      colorReactivity = settings.colorReact;
+    }
+    
+    if (settings.angleBeat !== undefined) {
+      angleBeatEnabled = settings.angleBeat;
+    }
+    
+    // Update UI to match
+    Object.keys(settings).forEach(key => {
+      try {
+        // Handle different types of controls
+        if (key === 'colorPalette') {
+          const select = document.getElementById('colorPalette');
+          if (select) {
+            select.value = settings[key];
+          }
+        } 
+        else if (key === 'zoomBeats') {
+          const checkbox = document.getElementById('zoomBeats');
+          if (checkbox) {
+            checkbox.checked = settings[key];
+          }
+        }
+        else if (key === 'angleBeat') {
+          const checkbox = document.getElementById('angleBeat');
+          if (checkbox) {
+            checkbox.checked = settings[key];
+          }
+        }
+        else {
+          // Handle sliders
+          const control = document.getElementById(key);
+          const valueDisplay = document.getElementById(key + 'Value');
+          
+          if (control) {
+            control.value = settings[key];
+            
+            if (valueDisplay) {
+              valueDisplay.textContent = typeof settings[key] === 'number' ? 
+                settings[key].toString() : settings[key];
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error setting " + key + ": " + err.message);
+      }
+    });
+    
+    console.log("Custom preset applied successfully!");
+  } catch (err) {
+    console.error("Failed to apply custom preset: " + err.message);
+  }
+}
+
+// Run the function to add the preset
+addBurningShipExtreme();
+
   </script>
 </body>
 </html>
