@@ -806,298 +806,342 @@ function setupAudio() {
         }
       `;
 
-      // Fragment shader - here's all the fractal magic
-      const fsSource = `
-        precision mediump float;
-        varying vec2 vTexCoord;
+// Fragment shader - here's all the fractal magic
+const fsSource = `
+  precision mediump float;
+  varying vec2 vTexCoord;
+  
+  uniform float uTime;
+  uniform float uZoom;
+  uniform float uDetail;
+  uniform float uPower;
+  uniform float uColorScale;
+  uniform vec2 uResolution;
+  uniform float uMetallic;
+  uniform float uInstances;
+  uniform float uAudioVolume;  // Audio volume level
+  uniform float uAudioReactivity; // Audio reactivity
+  uniform float uSpiralFactor; // Spiral factor
+  uniform float uBeatDetected; // Beat detection flag
+  uniform float uBeatMode; // Beat mode enabled
+  uniform float uColorReactivity; // Color reactivity
+  uniform int uColorPalette; // Color palette selection
+  uniform float uAngleChange; // Angle change rate
+  uniform float uCenterVortex; // Center vortex intensity
+  uniform float uAngleBeat; // Angle beat mode (0 or 1)
+  
+  // Dodajemy stałą złotego podziału dla wzorów Fibonacciego
+  #define PHI 1.61803398875
+
+  #define MAX_ITERATIONS 100
+  
+  // Dodajemy funkcję wygładzania dla łagodniejszych przejść
+  float smoothClamp(float x, float a, float b) {
+    float t = clamp((x - a) / (b - a), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t); // Wygładzony clamp z funkcją Hermite
+  }
+
+  void main() {
+    // Audio effect - use volume to modulate parameters
+    float audioEffect = uAudioVolume * uAudioReactivity;
+    
+    // Smooth audio transitions using a sigmoid function to prevent sharp edges
+    float smoothAudio = 1.0 / (1.0 + exp(-10.0 * (audioEffect - 0.5))) * audioEffect;
+    smoothAudio = mix(audioEffect, smoothAudio, 0.7); // Blend for natural effect
+
+    // Scale coordinates
+    vec2 uv = vTexCoord;
+    uv = uv * 2.0 - 1.0;
+    uv.x *= uResolution.x / uResolution.y;
+    
+    // Time animation and rotation
+    float time = uTime * 0.3;
+    float rotAngle = time * 0.2 * PHI; // Dodajemy złoty podział do animacji
+    mat2 rot = mat2(cos(rotAngle), -sin(rotAngle), sin(rotAngle), cos(rotAngle));
+    uv = rot * uv;
+    
+    // Zoom based on beat detection or continuous audio
+    float zoomFactor = 1.0;
+    
+    // If beat mode is enabled - zoom based on beats with strong but smooth response
+    if (uBeatMode > 0.5) {
+      if (uBeatDetected > 0.5) {
+        // Zastępujemy ostrą zmianę płynniejszą funkcją wykładniczą
+        float beatIntensity = pow(smoothAudio, 2.0) * 3.0;
+        zoomFactor = 1.0 + beatIntensity;
+      } else {
+        // Gradual zoom out between beats
+        float fadeOut = smoothAudio * (0.5 + 0.5 * sin(time * 4.0));
+        zoomFactor = 1.0 + fadeOut;
+      }
+    } else {
+      // Continuous audio-reactive mode with smoother transitions
+      // Dodajemy złoty podział do pulsowania dla naturalniejszego efektu
+      zoomFactor = 1.0 + smoothAudio * 2.0 + 0.05 * sin(time * PHI);
+    }
+    
+    // Apply zoom factor
+    float pulsatingZoom = mix(uZoom, uZoom * zoomFactor, smoothstep(0.0, 1.0, smoothAudio));          
+    // Make the fractal truly seamless with proper centering
+    vec2 center = vec2(0.0, 0.0);
+    uv = (uv - center) / pulsatingZoom + center;
+    
+    // Add drift in various directions
+    uv += vec2(sin(time * 0.3 * PHI) * 0.3, cos(time * 0.4 * PHI) * 0.2);          
+    // Fractal implementation
+    vec2 c = uv;
+    vec2 z = vec2(0.0);
+    float iter = 0.0;
+    float smoothValue = 0.0;
+    float lastLength = 0.0;
+    
+    // Variable fractal shape - now reacts to audio
+    float audioPowerBoost = 1.0 + smoothAudio * 2.0; // Greater reaction for power but smoother
+    float morphPower = uPower * (1.0 + 0.2 * sin(time * 0.7)) * audioPowerBoost;
+
+    // Fibonacci spiral constants dla naturalniejszych wzorów fraktalnych
+    float goldenAngle = PHI * 2.0 * 3.14159; 
+    
+    for (int i = 0; i < MAX_ITERATIONS; i++) {
+      if (float(i) > uDetail) break;
+      
+      // Ulepszona wersja spirali z wykorzystaniem wzorów Fibonacciego
+      float spiralParam = length(z) * PHI; // Parameter bazujący na Fibonaccim
+      float angle = atan(z.y, z.x) * morphPower + time * 0.2 + smoothAudio * 3.0;
+      float radius = pow(length(z) + 0.1 * sin(time * 0.5 * PHI), morphPower);
+
+      // Dodajemy spirale Fibonacciego zamiast zwykłej sinusoidy
+      float spiral = 0.1 * sin(spiralParam * 10.0 + time * PHI) * uSpiralFactor;
+      angle += spiral;
+      z = vec2(radius * cos(angle), radius * sin(angle)) + c;
+      
+      // Store length before checking limit
+      lastLength = length(z);
+      
+      if (lastLength > 2.0) {
+        // Ulepszone przejście na krawędzi z podwójnym wygładzaniem
+        float edge = length(z) / 2.0;
+        // Podstawowa wartość smoothing
+        float baseSmooth = float(i) - log(log(lastLength)) / log(2.0);
+        // Dodatkowe wygładzanie krawędzi z funkcją Hermite
+        float edgeFactor = smoothClamp((lastLength - 1.8) / 0.4, 0.0, 1.0);
+        // Mieszanie wartości dla płynniejszego przejścia
+        smoothValue = mix(baseSmooth, float(i), edgeFactor * smoothstep(1.0, 2.0, edge));
+        break;
+      }
+      
+      iter += 1.0;
+    }
+    
+    // Psychedelic fractal coloring
+    vec3 color;
+    
+    if (iter < uDetail) {
+      // Smoothing factor for better color transitions
+      float smoothed = iter - log2(log2(lastLength)) + 4.0;
+      float normalized = smoothed / uDetail;
+      
+      // Color modulation by time, position and audio
+      float audioColorShift = time * 0.1 + audioEffect * 3.0; // Audio affects colors
+      float colorIndex = normalized * uColorScale + audioColorShift;
+      colorIndex += sin(uv.x * 10.0 + time + audioEffect * 5.0) * 0.1;
+      colorIndex += cos(uv.y * 8.0 + time * 0.8) * 0.1;
+      
+      // Color palette selection based on uColorPalette uniform
+      vec3 a, b, c, d;
+      
+      // Default psytrance palette
+      if (uColorPalette == 0) { // psytrance
+          a = vec3(0.8, 0.5, 0.4);
+          b = vec3(0.2, 0.4, 0.2);
+          c = vec3(2.0, 1.0, 1.0);
+          d = vec3(0.0, 0.33, 0.67);
+      } 
+      else if (uColorPalette == 1) { // mandelbrot classic
+          a = vec3(0.5, 0.2, 0.8);
+          b = vec3(0.3, 0.5, 0.3);
+          c = vec3(1.0, 1.0, 2.0);
+          d = vec3(0.2, 0.4, 0.6);
+      }
+      else if (uColorPalette == 2) { // burning ship
+          a = vec3(0.6, 0.1, 0.0);
+          b = vec3(0.4, 0.2, 0.1);
+          c = vec3(3.0, 2.0, 1.0);
+          d = vec3(0.3, 0.2, 0.1);
+      }
+      else if (uColorPalette == 3) { // julia set
+          a = vec3(0.2, 0.5, 0.8);
+          b = vec3(0.8, 0.2, 0.5);
+          c = vec3(1.0, 2.0, 1.0);
+          d = vec3(0.6, 0.0, 0.8);
+      }
+      else if (uColorPalette == 4) { // rainbow
+          a = vec3(0.5, 0.5, 0.5);
+          b = vec3(0.5, 0.5, 0.5);
+          c = vec3(1.0, 1.0, 1.0);
+          d = vec3(0.0, 0.33, 0.67);
+      }
+      else if (uColorPalette == 5) { // neon dreams
+          a = vec3(0.2, 0.1, 0.3);
+          b = vec3(0.9, 0.1, 0.8);
+          c = vec3(2.0, 0.5, 0.8);
+          d = vec3(0.1, 0.8, 0.9);
+      }
+      
+      // Super-charged beat detection for color flashes
+      if (uBeatDetected > 0.5) {
+          // More aggressive color shift on beats
+          a = mix(a, vec3(1.0, 1.0, 1.0), 0.5 * uColorReactivity);
+          b = mix(b, vec3(0.9, 0.1, 0.9), 0.6 * uColorReactivity);
+          // Flash effect on beats
+          c = mix(c, vec3(3.0, 3.0, 3.0), 0.4 * uColorReactivity);
+      }
+      
+      // Apply enhanced continuous audio reactivity to colors
+      float colorAudioEffect = audioEffect * uColorReactivity;
+      // Create color cycling effect based on audio
+      a = mix(a, vec3(a.z, a.x, a.y), colorAudioEffect);
+      b = mix(b, vec3(b.z, b.x, b.y), colorAudioEffect);
+      // Make colors pulse with audio intensity
+      float pulseFactor = 1.0 + colorAudioEffect * 0.5;
+      a *= pulseFactor;
+      b *= pulseFactor;
+      
+      color = a + b * cos(6.28318 * (c * colorIndex + d));
+      color = pow(color, vec3(0.75)); // Enhance saturation
+      
+      // Dodaj wygładzanie koloru na granicach
+      float edgeDistance = abs(iter - uDetail * 0.7) / (uDetail * 0.3);
+      if (edgeDistance < 0.3) {
+        // Tworzymy dodatkową warstwę koloru dla wygładzenia
+        float edgeFactor = smoothClamp(1.0 - edgeDistance / 0.3, 0.0, 1.0);
+        vec3 blendColor = color * 0.8 + vec3(0.1, 0.05, 0.15);
         
-        uniform float uTime;
-        uniform float uZoom;
-        uniform float uDetail;
-        uniform float uPower;
-        uniform float uColorScale;
-        uniform vec2 uResolution;
-        uniform float uMetallic;
-        uniform float uInstances;
-        uniform float uAudioVolume;  // Audio volume level
-        uniform float uAudioReactivity; // Audio reactivity
-        uniform float uSpiralFactor; // Spiral factor
-        uniform float uBeatDetected; // Beat detection flag
-        uniform float uBeatMode; // Beat mode enabled
-        uniform float uColorReactivity; // Color reactivity
-        uniform int uColorPalette; // Color palette selection
-        uniform float uAngleChange; // Angle change rate
-        uniform float uCenterVortex; // Center vortex intensity
-        uniform float uAngleBeat; // Angle beat mode (0 or 1)
+        // Dodajemy teksturę Fibonacciego by ukryć artefakty
+        float fibTex = sin(atan(uv.y, uv.x) * PHI * 8.0 + length(uv) * 25.0 * PHI) * 0.5 + 0.5;
+        fibTex = mix(fibTex, 0.5, 0.3); // Zmiękczamy teksturę
         
-        // Dodajemy stałą złotego podziału dla wzorów Fibonacciego
-        #define PHI 1.61803398875
+        // Mieszamy kolory z użyciem funkcji smoothClamp dla łagodniejszych przejść
+        color = mix(color, blendColor, edgeFactor * 0.6 * fibTex);
+      }
 
-        #define MAX_ITERATIONS 100
+      // Add concentric circles modulated by uMetallic and audio
+      float ringFreq = mix(10.0, 40.0, uMetallic) * (1.0 + audioEffect * 2.0);
+      float rings = sin(lastLength * ringFreq - time * 5.0) * 0.5 + 0.5;
+      color = mix(color, color * vec3(rings, 1.0-rings, rings*1.5), 0.3 * uMetallic);
+      
+      // Add pulsing effect synchronized with beat and audio
+      float beat = pow(sin(time * 4.0) * 0.5 + 0.5, 8.0) + audioEffect;
+      color = mix(color, vec3(1.0, 0.7, 0.2), beat * uMetallic * 0.5);
+      
+      // Hyperspiral in areas close to boundary
+      if (iter > uDetail * 0.7) {
+        float spiral = sin(atan(uv.y, uv.x) * 10.0 + length(uv) * 30.0 - time * 3.0) * 0.5 + 0.5;
+        float spiralIntensity = pow(normalized, 3.0) * uMetallic * (1.0 + audioEffect);
+        vec3 spiralColor = a + b * cos(6.28318 * (c * (spiral + time * 0.2) + d));
+        spiralColor = pow(spiralColor, vec3(0.75));
+        color = mix(color, spiralColor, spiralIntensity * 0.7);
+      }
+    } else {
+      // Hypnotic center core visualization - ultra psychedelic
+      float dist = length(uv);
+
+      // Define an angle for the center core calculations
+      float centerAngle = atan(uv.y, uv.x);
+      
+      // Dodaj płynne przejścia w centrum spirali
+      float smoothCenter = 0.0;
+      for (int i = 1; i <= 5; i++) {
+        float fi = float(i);
+        float centerFreq = 30.0 + fi * 5.0 * PHI;
+        float centerPhase = time * (0.3 + fi * 0.1) * PHI;
         
-        void main() {
-          // Audio effect - use volume to modulate parameters
-          float audioEffect = uAudioVolume * uAudioReactivity;
-          
-          // Smooth audio transitions using a sigmoid function to prevent sharp edges
-          float smoothAudio = 1.0 / (1.0 + exp(-10.0 * (audioEffect - 0.5))) * audioEffect;
-          smoothAudio = mix(audioEffect, smoothAudio, 0.7); // Blend for natural effect
+        // Tworzymy nakładające się warstwy dla wygładzenia
+        smoothCenter += sin(centerAngle * (PHI * fi) + dist * centerFreq - centerPhase) * (0.2 / fi);
+      }
+      smoothCenter = smoothCenter * 0.5 + 0.5;
+      
+      // Dynamic angle rotation based on audio and time
+      // This creates the changing angle effect every 1-2 seconds
+      float angleModulation = sin(time * 0.5) * 2.0 * 3.14159 * (1.0 + audioEffect * 3.0);
+      float angleOffset = time * 0.2 + audioEffect * 5.0; // Makes it rotate with audio
+      
+      // Apply angle beat effect if enabled
+      if (uAngleBeat > 0.5 && uBeatDetected > 0.5) {
+        // Sharp angle change on beat
+        angleModulation += 3.14159 * 0.5 * uAudioReactivity;
+      }
+      
+      float finalAngle = centerAngle + angleModulation + angleOffset;
+      
+      // Add angle change speed based on slider
+      finalAngle += time * uAngleChange * 2.0;
+      
+      // Super detailed hypnotic spiral in center
+      float spiralFreq = 40.0 * (1.0 + audioEffect * 3.0);
+      float spiral = sin(finalAngle * uInstances + dist * spiralFreq - time * 4.0) * 0.5 + 0.5;
+      float spiral2 = cos(finalAngle * (uInstances * 0.7) - dist * spiralFreq * 1.8 + time * 5.0) * 0.5 + 0.5;
+      
+      // Center vortex effect - stronger with slider value
+      // Center vortex effect z płynniejszymi przejściami
+      float vortexStrength = uCenterVortex * (1.0 + smoothAudio * 3.0);
+      // Używamy smoothCenter dla mieszania
+      float vortexBase = sin(dist * 30.0 * PHI - time * 6.0 * PHI) * 0.5 + 0.5;
+      float vortexBlend = mix(vortexBase, smoothCenter, 0.4);
+      spiral = mix(spiral, vortexBlend, vortexStrength);
 
-          // Scale coordinates
-          vec2 uv = vTexCoord;
-          uv = uv * 2.0 - 1.0;
-          uv.x *= uResolution.x / uResolution.y;
-          
-          // Time animation and rotation
-          float time = uTime * 0.3;
-          float rotAngle = time * 0.2 * PHI; // Dodajemy złoty podział do animacji
-          mat2 rot = mat2(cos(rotAngle), -sin(rotAngle), sin(rotAngle), cos(rotAngle));
-          uv = rot * uv;
-          
-          // Zoom based on beat detection or continuous audio
-          float zoomFactor = 1.0;
-          
-          // If beat mode is enabled - zoom based on beats with strong but smooth response
-          if (uBeatMode > 0.5) {
-            if (uBeatDetected > 0.5) {
-              // Zastępujemy ostrą zmianę płynniejszą funkcją wykładniczą
-              float beatIntensity = pow(smoothAudio, 2.0) * 3.0;
-              zoomFactor = 1.0 + beatIntensity;
-            } else {
-              // Gradual zoom out between beats
-              float fadeOut = smoothAudio * (0.5 + 0.5 * sin(time * 4.0));
-              zoomFactor = 1.0 + fadeOut;
-            }
-          } else {
-            // Continuous audio-reactive mode with smoother transitions
-            // Dodajemy złoty podział do pulsowania dla naturalniejszego efektu
-            zoomFactor = 1.0 + smoothAudio * 2.0 + 0.05 * sin(time * PHI);
-          }
-          
-          // Apply zoom factor
-          float pulsatingZoom = mix(uZoom, uZoom * zoomFactor, smoothstep(0.0, 1.0, smoothAudio));          
-          // Make the fractal truly seamless with proper centering
-          vec2 center = vec2(0.0, 0.0);
-          uv = (uv - center) / pulsatingZoom + center;
-          
-          // Add drift in various directions
-          uv += vec2(sin(time * 0.3 * PHI) * 0.3, cos(time * 0.4 * PHI) * 0.2);          
-          // Fractal implementation
-          vec2 c = uv;
-          vec2 z = vec2(0.0);
-          float iter = 0.0;
-          float smoothValue = 0.0;
-          float lastLength = 0.0;
-          
-          // Variable fractal shape - now reacts to audio
-          float audioPowerBoost = 1.0 + smoothAudio * 2.0; // Greater reaction for power but smoother
-          float morphPower = uPower * (1.0 + 0.2 * sin(time * 0.7)) * audioPowerBoost;
-
-          // Fibonacci spiral constants dla naturalniejszych wzorów fraktalnych
-          float goldenAngle = PHI * 2.0 * 3.14159; 
-          
-          for (int i = 0; i < MAX_ITERATIONS; i++) {
-            if (float(i) > uDetail) break;
-            
-          // Ulepszona wersja spirali z wykorzystaniem wzorów Fibonacciego
-          float spiralParam = length(z) * PHI; // Parameter bazujący na Fibonaccim
-          float angle = atan(z.y, z.x) * morphPower + time * 0.2 + smoothAudio * 3.0;
-          float radius = pow(length(z) + 0.1 * sin(time * 0.5 * PHI), morphPower);
-
-          // Dodajemy spirale Fibonacciego zamiast zwykłej sinusoidy
-          float spiral = 0.1 * sin(spiralParam * 10.0 + time * PHI) * uSpiralFactor;
-            angle += spiral;
-            z = vec2(radius * cos(angle), radius * sin(angle)) + c;
-            
-            // Store length before checking limit
-            lastLength = length(z);
-            
-          if (lastLength > 2.0) {
-            // Płynniejsze przejście na krawędzi
-            float edge = length(z) / 2.0;
-            smoothValue = float(i) - log(log(lastLength)) / log(2.0);
-            smoothValue = mix(smoothValue, float(i), smoothstep(1.0, 2.0, edge));
-            break;
-          }
-            
-            iter += 1.0;
-          }
-          
-          // Psychedelic fractal coloring
-          vec3 color;
-          
-          if (iter < uDetail) {
-            // Smoothing factor for better color transitions
-            float smoothed = iter - log2(log2(lastLength)) + 4.0;
-            float normalized = smoothed / uDetail;
-            
-            // Color modulation by time, position and audio
-            float audioColorShift = time * 0.1 + audioEffect * 3.0; // Audio affects colors
-            float colorIndex = normalized * uColorScale + audioColorShift;
-            colorIndex += sin(uv.x * 10.0 + time + audioEffect * 5.0) * 0.1;
-            colorIndex += cos(uv.y * 8.0 + time * 0.8) * 0.1;
-            
-            // Color palette selection based on uColorPalette uniform
-            vec3 a, b, c, d;
-            
-            // Default psytrance palette
-            if (uColorPalette == 0) { // psytrance
-                a = vec3(0.8, 0.5, 0.4);
-                b = vec3(0.2, 0.4, 0.2);
-                c = vec3(2.0, 1.0, 1.0);
-                d = vec3(0.0, 0.33, 0.67);
-            } 
-            else if (uColorPalette == 1) { // mandelbrot classic
-                a = vec3(0.5, 0.2, 0.8);
-                b = vec3(0.3, 0.5, 0.3);
-                c = vec3(1.0, 1.0, 2.0);
-                d = vec3(0.2, 0.4, 0.6);
-            }
-            else if (uColorPalette == 2) { // burning ship
-                a = vec3(0.6, 0.1, 0.0);
-                b = vec3(0.4, 0.2, 0.1);
-                c = vec3(3.0, 2.0, 1.0);
-                d = vec3(0.3, 0.2, 0.1);
-            }
-            else if (uColorPalette == 3) { // julia set
-                a = vec3(0.2, 0.5, 0.8);
-                b = vec3(0.8, 0.2, 0.5);
-                c = vec3(1.0, 2.0, 1.0);
-                d = vec3(0.6, 0.0, 0.8);
-            }
-            else if (uColorPalette == 4) { // rainbow
-                a = vec3(0.5, 0.5, 0.5);
-                b = vec3(0.5, 0.5, 0.5);
-                c = vec3(1.0, 1.0, 1.0);
-                d = vec3(0.0, 0.33, 0.67);
-            }
-            else if (uColorPalette == 5) { // neon dreams
-                a = vec3(0.2, 0.1, 0.3);
-                b = vec3(0.9, 0.1, 0.8);
-                c = vec3(2.0, 0.5, 0.8);
-                d = vec3(0.1, 0.8, 0.9);
-            }
-            
-            // Super-charged beat detection for color flashes
-            if (uBeatDetected > 0.5) {
-                // More aggressive color shift on beats
-                a = mix(a, vec3(1.0, 1.0, 1.0), 0.5 * uColorReactivity);
-                b = mix(b, vec3(0.9, 0.1, 0.9), 0.6 * uColorReactivity);
-                // Flash effect on beats
-                c = mix(c, vec3(3.0, 3.0, 3.0), 0.4 * uColorReactivity);
-            }
-            
-            // Apply enhanced continuous audio reactivity to colors
-            float colorAudioEffect = audioEffect * uColorReactivity;
-            // Create color cycling effect based on audio
-            a = mix(a, vec3(a.z, a.x, a.y), colorAudioEffect);
-            b = mix(b, vec3(b.z, b.x, b.y), colorAudioEffect);
-            // Make colors pulse with audio intensity
-            float pulseFactor = 1.0 + colorAudioEffect * 0.5;
-            a *= pulseFactor;
-            b *= pulseFactor;
-            
-            color = a + b * cos(6.28318 * (c * colorIndex + d));
-            color = pow(color, vec3(0.75)); // Enhance saturation
-            
-            // Add concentric circles modulated by uMetallic and audio
-            float ringFreq = mix(10.0, 40.0, uMetallic) * (1.0 + audioEffect * 2.0);
-            float rings = sin(lastLength * ringFreq - time * 5.0) * 0.5 + 0.5;
-            color = mix(color, color * vec3(rings, 1.0-rings, rings*1.5), 0.3 * uMetallic);
-            
-            // Add pulsing effect synchronized with beat and audio
-            float beat = pow(sin(time * 4.0) * 0.5 + 0.5, 8.0) + audioEffect;
-            color = mix(color, vec3(1.0, 0.7, 0.2), beat * uMetallic * 0.5);
-            
-            // Hyperspiral in areas close to boundary
-            if (iter > uDetail * 0.7) {
-              float spiral = sin(atan(uv.y, uv.x) * 10.0 + length(uv) * 30.0 - time * 3.0) * 0.5 + 0.5;
-              float spiralIntensity = pow(normalized, 3.0) * uMetallic * (1.0 + audioEffect);
-              vec3 spiralColor = a + b * cos(6.28318 * (c * (spiral + time * 0.2) + d));
-              spiralColor = pow(spiralColor, vec3(0.75));
-              color = mix(color, spiralColor, spiralIntensity * 0.7);
-            }
-          } else {
-            // Hypnotic center core visualization - ultra psychedelic
-            float dist = length(uv);
-            
-            // Dynamic angle rotation based on audio and time
-            // This creates the changing angle effect every 1-2 seconds
-            float angleModulation = sin(time * 0.5) * 2.0 * 3.14159 * (1.0 + audioEffect * 3.0);
-            float angleOffset = time * 0.2 + audioEffect * 5.0; // Makes it rotate with audio
-            
-            // Apply angle beat effect if enabled
-            if (uAngleBeat > 0.5 && uBeatDetected > 0.5) {
-              // Sharp angle change on beat
-              angleModulation += 3.14159 * 0.5 * uAudioReactivity;
-            }
-            
-            float angle = atan(uv.y, uv.x) + angleModulation + angleOffset;
-            
-            // Add angle change speed based on slider
-            angle += time * uAngleChange * 2.0;
-            
-            // Super detailed hypnotic spiral in center
-            float spiralFreq = 40.0 * (1.0 + audioEffect * 3.0);
-            float spiral = sin(angle * uInstances + dist * spiralFreq - time * 4.0) * 0.5 + 0.5;
-            float spiral2 = cos(angle * (uInstances * 0.7) - dist * spiralFreq * 1.8 + time * 5.0) * 0.5 + 0.5;
-            
-            // Center vortex effect - stronger with slider value
-            float vortexStrength = uCenterVortex * (1.0 + audioEffect * 3.0);
-            spiral = mix(spiral, sin(dist * 30.0 - time * 6.0) * 0.5 + 0.5, vortexStrength);
-            
-            // Rainbow spiral effect with audio reactivity
-            float rainbowSpeed = 2.0 + audioEffect * 4.0;
-            float rainbowFreq = 10.0 + audioEffect * 20.0;
-            float rainbowPhase = dist * rainbowFreq - time * rainbowSpeed;
-            
-            // Ultra-bright pulsing colors in spiral
-            vec3 a, b, c, d;
-            
-            // Rainbowy colors for center core with high saturation
-            a = vec3(0.9, 0.3, 0.9);
-            b = vec3(0.8, 0.8, 0.2);
-            c = vec3(3.0, 2.0, 1.0); 
-            d = vec3(0.3, 0.3, 0.7);
-            
-            // Change base colors based on audio
-            a = mix(a, vec3(0.4, 0.8, 0.7), audioEffect * 0.7);
-            b = mix(b, vec3(0.7, 0.2, 0.6), audioEffect * 0.7);
-            
-            vec3 spiralColor1 = a + b * cos(6.28318 * (c * (spiral + time * 0.3 + audioEffect) + d));
-            vec3 spiralColor2 = a + b * cos(6.28318 * (c * (spiral2 - time * 0.2) + d));
-            spiralColor1 = pow(spiralColor1, vec3(0.75));
-            spiralColor2 = pow(spiralColor2, vec3(0.75));
-            
-            // Mix spiral colors
-            color = mix(spiralColor1, spiralColor2, spiral * spiral2);
-            
-            // Depth effect in spiral
-            float depth = sin(dist * 20.0 - time + audioEffect * 10.0) * 0.5 + 0.5;
-            color *= depth * 1.5;
-            
-            // Add colorful rings
-            float rings = sin(dist * 50.0 - time * 3.0 + audioEffect * 20.0) * 0.5 + 0.5;
-            color = mix(color, vec3(rings, rings*0.5, 1.0-rings) * 1.5, 0.4);
-          }
-          
-          // Simulate multiple instances
-          float instances = max(1.0, uInstances);
-          float instEff = mod(iter/uDetail * instances, 1.0);
-          
-          // Fluorescence effect - as if glowing under UV
-          color = mix(color, color * color, 0.3);
-          
-          // Colorful glow with audio boost
-          float glow = sin(time * 2.0) * 0.5 + 0.5 + audioEffect * 0.5;
-          color += vec3(0.1, 0.05, 0.2) * glow;
-          
-          // Increase overall brightness in response to audio
-          color *= 1.0 + audioEffect * 0.5;
-          
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `;
+      // Rainbow spiral effect with audio reactivity
+      float rainbowSpeed = 2.0 + audioEffect * 4.0;
+      float rainbowFreq = 10.0 + audioEffect * 20.0;
+      float rainbowPhase = dist * rainbowFreq - time * rainbowSpeed;
+      
+      // Ultra-bright pulsing colors in spiral
+      vec3 a, b, c, d;
+      
+      // Rainbowy colors for center core with high saturation
+      a = vec3(0.9, 0.3, 0.9);
+      b = vec3(0.8, 0.8, 0.2);
+      c = vec3(3.0, 2.0, 1.0); 
+      d = vec3(0.3, 0.3, 0.7);
+      
+      // Change base colors based on audio
+      a = mix(a, vec3(0.4, 0.8, 0.7), audioEffect * 0.7);
+      b = mix(b, vec3(0.7, 0.2, 0.6), audioEffect * 0.7);
+      
+      vec3 spiralColor1 = a + b * cos(6.28318 * (c * (spiral + time * 0.3 + audioEffect) + d));
+      vec3 spiralColor2 = a + b * cos(6.28318 * (c * (spiral2 - time * 0.2) + d));
+      spiralColor1 = pow(spiralColor1, vec3(0.75));
+      spiralColor2 = pow(spiralColor2, vec3(0.75));
+      
+      // Mix spiral colors
+      color = mix(spiralColor1, spiralColor2, spiral * spiral2);
+      
+      // Depth effect in spiral
+      float depth = sin(dist * 20.0 - time + audioEffect * 10.0) * 0.5 + 0.5;
+      color *= depth * 1.5;
+      
+      // Add colorful rings
+      float rings = sin(dist * 50.0 - time * 3.0 + audioEffect * 20.0) * 0.5 + 0.5;
+      color = mix(color, vec3(rings, rings*0.5, 1.0-rings) * 1.5, 0.4);
+    }
+    
+    // Simulate multiple instances
+    float instances = max(1.0, uInstances);
+    float instEff = mod(iter/uDetail * instances, 1.0);
+    
+    // Fluorescence effect - as if glowing under UV
+    color = mix(color, color * color, 0.3);
+    
+    // Colorful glow with audio boost
+    float glow = sin(time * 2.0) * 0.5 + 0.5 + audioEffect * 0.5;
+    color += vec3(0.1, 0.05, 0.2) * glow;
+    
+    // Increase overall brightness in response to audio
+    color *= 1.0 + audioEffect * 0.5;
+    
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
 
       // Shader compilation
       function compileShader(gl, source, type) {
