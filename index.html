@@ -295,6 +295,115 @@
     // Wait for DOM to fully load
 // Add this code to your HTML file, replacing the existing initialization in the DOMContentLoaded event
 // This makes the Burning Ship Extreme preset load automatically
+// Add these global constants at the beginning of your code
+// This should be added right after initializing your variables in the DOMContentLoaded event listener
+
+// Define audio processing constants globally
+const BEAT_THRESHOLD = 0.15;
+const BEAT_MIN_INTERVAL = 100; // ms
+let lastBeatTime = 0;
+
+// Function to analyze audio data (with fixed reference to constants)
+function analyzeAudio() {
+  if (!audioEnabled || !analyser) return 0;
+  
+  // Get frequency data
+  analyser.getByteFrequencyData(audioDataArray);
+  
+  // Calculate average volume level
+  let sum = 0;
+  let bassBins = 0;
+  let bassSum = 0;
+  for (let i = 0; i < audioDataArray.length; i++) {
+    sum += audioDataArray[i];
+    
+    // Calculate bass frequencies separately (first 1/4 of bins typically)
+    if (i < audioDataArray.length / 4) {
+      bassSum += audioDataArray[i];
+      bassBins++;
+    }
+  }
+  let avg = sum / audioDataArray.length;
+  
+  // Store previous volume for delta calculation
+  lastVolume = audioVolume;
+  
+  // Normalize to 0-1 range
+  audioVolume = avg / 255;
+  
+  // Calculate bass energy - useful for beat detection
+  let bassEnergy = bassBins > 0 ? (bassSum / bassBins) / 255 : 0;
+  
+  // Calculate volume change
+  volumeDelta = audioVolume - lastVolume;
+  
+  // Shift volume history
+  volumeHistory.shift();
+  volumeHistory.push(audioVolume);
+  
+  // Beat detection
+  const now = Date.now();
+  beatDetected = false;
+  
+  // Beat is detected when:
+  // 1. Volume is above average threshold
+  // 2. Volume is significantly higher than recent history
+  // 3. Enough time has passed since last beat
+  
+  const avgHistory = volumeHistory.reduce((sum, vol) => sum + vol, 0) / volumeHistory.length;
+  
+  if (
+    audioVolume > 0.2 && // Minimum volume threshold
+    volumeDelta > BEAT_THRESHOLD && // Sudden increase
+    audioVolume > avgHistory * 1.2 && // Higher than recent average
+    now - lastBeatTime > BEAT_MIN_INTERVAL // Not too soon after last beat
+  ) {
+    beatDetected = true;
+    lastBeatTime = now;
+  }
+  
+  // Shift beat history
+  beatHistory.shift();
+  beatHistory.push(beatDetected);
+  
+  // Update VU meter
+  document.getElementById('vuLevel').style.width = (audioVolume * 100) + '%';
+  
+  return audioVolume;
+}
+
+// Function to start audio analysis
+function setupAudio() {
+  try {
+    // Create audio context
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    
+    // Configure analyzer
+    analyser.fftSize = 256;
+    audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    // Add limiter to prevent crashes from loud sounds
+    analyser.smoothingTimeConstant = 0.8; // Default is 0.8, this smooths out sudden changes
+    
+    // Connect microphone
+    navigator.mediaDevices.getUserMedia({audio: true})
+      .then(function(stream) {
+        microphone = audioContext.createMediaStreamSource(stream);
+        microphone.connect(analyser);
+        audioEnabled = true;
+        document.getElementById('audioEnable').textContent = 'Audio Reactive Mode Enabled!';
+        document.getElementById('audioEnable').style.background = 'linear-gradient(to right, #00ff99, #ff00ff)';
+      })
+      .catch(function(err) {
+        console.error('Microphone access error:', err);
+        alert('Cannot access microphone. Check permissions.');
+      });
+  } catch (e) {
+    console.error('Audio API initialization error:', e);
+    alert('Your browser does not support Web Audio API.');
+  }
+}
 
 document.addEventListener('DOMContentLoaded', function() {
   // Controls toggle functionality
