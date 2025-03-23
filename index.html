@@ -295,115 +295,6 @@
     // Wait for DOM to fully load
 // Add this code to your HTML file, replacing the existing initialization in the DOMContentLoaded event
 // This makes the Burning Ship Extreme preset load automatically
-// Add these global constants at the beginning of your code
-// This should be added right after initializing your variables in the DOMContentLoaded event listener
-
-// Define audio processing constants globally
-const BEAT_THRESHOLD = 0.1;
-const BEAT_MIN_INTERVAL = 125; // ms
-let lastBeatTime = 0;
-
-// Function to analyze audio data (with fixed reference to constants)
-function analyzeAudio() {
-  if (!audioEnabled || !analyser) return 0;
-  
-  // Get frequency data
-  analyser.getByteFrequencyData(audioDataArray);
-  
-  // Calculate average volume level
-  let sum = 0;
-  let bassBins = 0;
-  let bassSum = 0;
-  for (let i = 0; i < audioDataArray.length; i++) {
-    sum += audioDataArray[i];
-    
-    // Calculate bass frequencies separately (first 1/4 of bins typically)
-    if (i < audioDataArray.length / 4) {
-      bassSum += audioDataArray[i];
-      bassBins++;
-    }
-  }
-  let avg = sum / audioDataArray.length;
-  
-  // Store previous volume for delta calculation
-  lastVolume = audioVolume;
-  
-  // Normalize to 0-1 range
-  audioVolume = avg / 255;
-  
-  // Calculate bass energy - useful for beat detection
-  let bassEnergy = bassBins > 0 ? (bassSum / bassBins) / 255 : 0;
-  
-  // Calculate volume change
-  volumeDelta = audioVolume - lastVolume;
-  
-  // Shift volume history
-  volumeHistory.shift();
-  volumeHistory.push(audioVolume);
-  
-  // Beat detection
-  const now = Date.now();
-  beatDetected = false;
-  
-  // Beat is detected when:
-  // 1. Volume is above average threshold
-  // 2. Volume is significantly higher than recent history
-  // 3. Enough time has passed since last beat
-  
-  const avgHistory = volumeHistory.reduce((sum, vol) => sum + vol, 0) / volumeHistory.length;
-  
-  if (
-    audioVolume > 0.2 && // Minimum volume threshold
-    volumeDelta > BEAT_THRESHOLD && // Sudden increase
-    audioVolume > avgHistory * 1.2 && // Higher than recent average
-    now - lastBeatTime > BEAT_MIN_INTERVAL // Not too soon after last beat
-  ) {
-    beatDetected = true;
-    lastBeatTime = now;
-  }
-  
-  // Shift beat history
-  beatHistory.shift();
-  beatHistory.push(beatDetected);
-  
-  // Update VU meter
-  document.getElementById('vuLevel').style.width = (audioVolume * 100) + '%';
-  
-  return audioVolume;
-}
-
-// Function to start audio analysis
-function setupAudio() {
-  try {
-    // Create audio context
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioContext.createAnalyser();
-    
-    // Configure analyzer
-    analyser.fftSize = 256;
-    audioDataArray = new Uint8Array(analyser.frequencyBinCount);
-    
-    // Add limiter to prevent crashes from loud sounds
-    analyser.smoothingTimeConstant = 0.8; // Default is 0.8, this smooths out sudden changes
-    
-    // Connect microphone
-    navigator.mediaDevices.getUserMedia({audio: true})
-      .then(function(stream) {
-        microphone = audioContext.createMediaStreamSource(stream);
-        microphone.connect(analyser);
-        audioEnabled = true;
-        document.getElementById('audioEnable').textContent = 'Audio Reactive Mode Enabled!';
-        document.getElementById('audioEnable').style.background = 'linear-gradient(to right, #00ff99, #ff00ff)';
-      })
-      .catch(function(err) {
-        console.error('Microphone access error:', err);
-        alert('Cannot access microphone. Check permissions.');
-      });
-  } catch (e) {
-    console.error('Audio API initialization error:', e);
-    alert('Your browser does not support Web Audio API.');
-  }
-}
 
 document.addEventListener('DOMContentLoaded', function() {
   // Controls toggle functionality
@@ -452,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let angleBeatEnabled = true; // Default from Burning Ship Extreme
   
   // === DEFAULT VALUES FOR BURNING SHIP EXTREME ===
-  let defaultZoom = 2.6;
+  let defaultZoom = 3.6;
   let defaultDetail = 10;
   let defaultPower = 1.0;
   let defaultSpeed = 2.0;
@@ -585,216 +476,74 @@ function setupAudio() {
   }
 }
 
-// Add this improved version of the analyzeAudio function to prevent crashes from loud sounds
-// Replace your existing analyzeAudio function with this one
-
-function analyzeAudio() {
-  if (!audioEnabled || !analyser) return 0;
-  
-  try {
-    // Get frequency data
-    analyser.getByteFrequencyData(audioDataArray);
-    
-    // Calculate average volume level
-    let sum = 0;
-    let bassBins = 0;
-    let bassSum = 0;
-    for (let i = 0; i < audioDataArray.length; i++) {
-      sum += audioDataArray[i];
-      
-      // Calculate bass frequencies separately (first 1/4 of bins typically)
-      if (i < audioDataArray.length / 4) {
-        bassSum += audioDataArray[i];
-        bassBins++;
-      }
-    }
-    let avg = sum / audioDataArray.length;
-    
-    // Store previous volume for delta calculation
-    lastVolume = audioVolume;
-    
-    // Normalize to 0-1 range with SAFETY LIMITER to prevent crashes
-    const rawVolume = avg / 255;
-    
-    // Apply soft limiter with sigmoid function to prevent extreme values
-    // This creates a smooth curve that approaches 1 but never exceeds it
-    const limitedVolume = 1 / (1 + Math.exp(-5 * (rawVolume - 0.5))) * 0.95;
-    
-    // Apply temporal smoothing to prevent sudden spikes
-    audioVolume = audioVolume * 0.3 + limitedVolume * 0.7;
-    
-    // Calculate bass energy - useful for beat detection
-    let bassEnergy = bassBins > 0 ? (bassSum / bassBins) / 255 : 0;
-    
-    // Calculate volume change with limiting
-    const rawDelta = audioVolume - lastVolume;
-    // Limit the maximum delta to prevent crashes from extreme changes
-    volumeDelta = Math.max(-0.3, Math.min(0.3, rawDelta));
-    
-    // Shift volume history
-    volumeHistory.shift();
-    volumeHistory.push(audioVolume);
-    
-    // Beat detection with improved stability
-    const now = Date.now();
-    beatDetected = false;
-    
-    // Beat is detected when:
-    // 1. Volume is above average threshold
-    // 2. Volume is significantly higher than recent history
-    // 3. Enough time has passed since last beat
-    
-    const avgHistory = volumeHistory.reduce((sum, vol) => sum + vol, 0) / volumeHistory.length;
-    
-    // BEAT_THRESHOLD and BEAT_MIN_INTERVAL are now local constants for safety
-    const BEAT_THRESHOLD = 0.12; // Slightly reduced from 0.15 for stability
-    const BEAT_MIN_INTERVAL = 120; // Slightly increased from 100ms for stability
-    
-    if (
-      audioVolume > 0.15 && // Minimum volume threshold
-      volumeDelta > BEAT_THRESHOLD && // Sudden increase
-      audioVolume > avgHistory * 1.15 && // Higher than recent average
-      now - lastBeatTime > BEAT_MIN_INTERVAL // Not too soon after last beat
-    ) {
-      beatDetected = true;
-      lastBeatTime = now;
-    }
-    
-    // Shift beat history
-    beatHistory.shift();
-    beatHistory.push(beatDetected);
-    
-    // Update VU meter with limited value to prevent visual glitches
-    const vuMeter = document.getElementById('vuLevel');
-    if (vuMeter) {
-      vuMeter.style.width = (audioVolume * 100) + '%';
-    }
-    
-    return audioVolume;
-  } catch (error) {
-    // Error recovery to prevent crashes
-    console.error('Audio analysis error:', error);
-    
-    // Return a safe default value instead of crashing
-    return 0.1;
-  }
-}
-
-// Add this error recovery function to prevent black screens
-// Add this near the start of your render function
-
-function render() {
-  // Add this error recovery mechanism at the beginning of the render function
-  try {
-    // Update size
-    resizeCanvas();
-    
-    // Settings
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    
-    // Use program
-    gl.useProgram(program);
-    
-    // Position
-    gl.enableVertexAttribArray(positionAttributeLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-    
-    // Audio analysis with error handling
-    let currentAudioVolume = 0;
-    try {
-      currentAudioVolume = analyzeAudio();
-    } catch (error) {
-      console.error('Failed to process audio:', error);
-      // Use a safe default value to prevent crashes
-      currentAudioVolume = 0.1;
-    }
-    
-    // Rest of your render function...
-    
-  } catch (renderError) {
-    console.error('Render error detected, attempting recovery:', renderError);
-    
-    // Emergency reset of audio values to prevent further crashes
-    audioVolume = 0.1;
-    beatDetected = false;
-    lastVolume = 0.1;
-    volumeDelta = 0;
-    
-    // Clear screen to avoid visual glitches
-    try {
-      gl.clearColor(0.0, 0.0, 0.0, 1.0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-    } catch (e) {
-      console.error('Failed to clear screen during recovery');
-    }
-  }
-  
-  // Always continue animation loop, even after errors
-  requestAnimationFrame(render);
-}
-
-// Add this error handling for the setupAudio function
-// Replace your setupAudio function with this improved version
-
-function setupAudio() {
-  try {
-    // Create audio context
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioContext.createAnalyser();
-    
-    // Configure analyzer with more stable settings
-    analyser.fftSize = 256; // Standard size for visualization
-    analyser.smoothingTimeConstant = 0.85; // Add smoothing (default is 0.8)
-    analyser.minDecibels = -85; // Default is -100, making this less sensitive
-    analyser.maxDecibels = -30; // Default is -30, keeping this the same
-    
-    audioDataArray = new Uint8Array(analyser.frequencyBinCount);
-    
-    // Define BEAT_THRESHOLD and BEAT_MIN_INTERVAL if they're not defined elsewhere
-    if (typeof BEAT_THRESHOLD === 'undefined') window.BEAT_THRESHOLD = 0.12;
-    if (typeof BEAT_MIN_INTERVAL === 'undefined') window.BEAT_MIN_INTERVAL = 120;
-    if (typeof lastBeatTime === 'undefined') window.lastBeatTime = 0;
-    
-    // Connect microphone with error handling
-    navigator.mediaDevices.getUserMedia({audio: true})
-      .then(function(stream) {
-        try {
-          // Create audio source and add limiter
-          microphone = audioContext.createMediaStreamSource(stream);
+      // Function for real-time audio analysis
+      function analyzeAudio() {
+        if (!audioEnabled || !analyser) return 0;
+        
+        // Get frequency data
+        analyser.getByteFrequencyData(audioDataArray);
+        
+        // Calculate average volume level
+        let sum = 0;
+        let bassBins = 0;
+        let bassSum = 0;
+        for (let i = 0; i < audioDataArray.length; i++) {
+          sum += audioDataArray[i];
           
-          // Add a compressor to prevent peaks
-          const compressor = audioContext.createDynamicsCompressor();
-          compressor.threshold.value = -24;  // Threshold in dB
-          compressor.knee.value = 30;       // Knee in dB
-          compressor.ratio.value = 12;      // Compression ratio
-          compressor.attack.value = 0.003;  // Attack time in seconds
-          compressor.release.value = 0.25;  // Release time in seconds
-          
-          // Connect the nodes: microphone -> compressor -> analyser
-          microphone.connect(compressor);
-          compressor.connect(analyser);
-          
-          audioEnabled = true;
-          document.getElementById('audioEnable').textContent = 'Audio Reactive Mode Enabled!';
-          document.getElementById('audioEnable').style.background = 'linear-gradient(to right, #00ff99, #ff00ff)';
-          
-          console.log('Audio reactive mode successfully enabled with safety limiters.');
-        } catch (setupError) {
-          console.error('Error setting up audio processing chain:', setupError);
-          alert('Error initializing audio processor. Try refreshing the page.');
+          // Calculate bass frequencies separately (first 1/4 of bins typically)
+          if (i < audioDataArray.length / 4) {
+            bassSum += audioDataArray[i];
+            bassBins++;
+          }
         }
-      })
-      .catch(function(err) {
-        console.error('Microphone access error:', err);
-        alert('Cannot access microphone. Check permissions.');
-      });
-  } catch (e) {
-    console.error('Audio API initialization error:', e);
-    alert('Your browser does not support Web Audio API.');
-  }
-}
+        let avg = sum / audioDataArray.length;
+        
+        // Store previous volume for delta calculation
+        lastVolume = audioVolume;
+        
+        // Normalize to 0-1 range
+        audioVolume = avg / 255;
+        
+        // Calculate bass energy - useful for beat detection
+        let bassEnergy = bassBins > 0 ? (bassSum / bassBins) / 255 : 0;
+        
+        // Calculate volume change
+        volumeDelta = audioVolume - lastVolume;
+        
+        // Shift volume history
+        volumeHistory.shift();
+        volumeHistory.push(audioVolume);
+        
+        // Beat detection
+        const now = Date.now();
+        beatDetected = false;
+        
+        // Beat is detected when:
+        // 1. Volume is above average threshold
+        // 2. Volume is significantly higher than recent history
+        // 3. Enough time has passed since last beat
+        
+        const avgHistory = volumeHistory.reduce((sum, vol) => sum + vol, 0) / volumeHistory.length;
+        
+        if (
+          audioVolume > 0.2 && // Minimum volume threshold
+          volumeDelta > BEAT_THRESHOLD && // Sudden increase
+          audioVolume > avgHistory * 1.2 && // Higher than recent average
+          now - lastBeatTime > BEAT_MIN_INTERVAL // Not too soon after last beat
+        ) {
+          beatDetected = true;
+          lastBeatTime = now;
+        }
+        
+        // Shift beat history
+        beatHistory.shift();
+        beatHistory.push(beatDetected);
+        
+        // Update VU meter
+        document.getElementById('vuLevel').style.width = (audioVolume * 100) + '%';
+        
+        return audioVolume;
+      }
       
       // Vertex shader - only passes coordinates
       const vsSource = `
@@ -806,342 +555,282 @@ function setupAudio() {
         }
       `;
 
-// Fragment shader - here's all the fractal magic
-const fsSource = `
-  precision mediump float;
-  varying vec2 vTexCoord;
-  
-  uniform float uTime;
-  uniform float uZoom;
-  uniform float uDetail;
-  uniform float uPower;
-  uniform float uColorScale;
-  uniform vec2 uResolution;
-  uniform float uMetallic;
-  uniform float uInstances;
-  uniform float uAudioVolume;  // Audio volume level
-  uniform float uAudioReactivity; // Audio reactivity
-  uniform float uSpiralFactor; // Spiral factor
-  uniform float uBeatDetected; // Beat detection flag
-  uniform float uBeatMode; // Beat mode enabled
-  uniform float uColorReactivity; // Color reactivity
-  uniform int uColorPalette; // Color palette selection
-  uniform float uAngleChange; // Angle change rate
-  uniform float uCenterVortex; // Center vortex intensity
-  uniform float uAngleBeat; // Angle beat mode (0 or 1)
-  
-  // Dodajemy stałą złotego podziału dla wzorów Fibonacciego
-  #define PHI 1.61803398875
-
-  #define MAX_ITERATIONS 100
-  
-  // Dodajemy funkcję wygładzania dla łagodniejszych przejść
-  float smoothClamp(float x, float a, float b) {
-    float t = clamp((x - a) / (b - a), 0.0, 1.0);
-    return t * t * (3.0 - 2.0 * t); // Wygładzony clamp z funkcją Hermite
-  }
-
-  void main() {
-    // Audio effect - use volume to modulate parameters
-    float audioEffect = uAudioVolume * uAudioReactivity;
-    
-    // Smooth audio transitions using a sigmoid function to prevent sharp edges
-    float smoothAudio = 1.0 / (1.0 + exp(-10.0 * (audioEffect - 0.5))) * audioEffect;
-    smoothAudio = mix(audioEffect, smoothAudio, 0.7); // Blend for natural effect
-
-    // Scale coordinates
-    vec2 uv = vTexCoord;
-    uv = uv * 2.0 - 1.0;
-    uv.x *= uResolution.x / uResolution.y;
-    
-    // Time animation and rotation
-    float time = uTime * 0.3;
-    float rotAngle = time * 0.2 * PHI; // Dodajemy złoty podział do animacji
-    mat2 rot = mat2(cos(rotAngle), -sin(rotAngle), sin(rotAngle), cos(rotAngle));
-    uv = rot * uv;
-    
-    // Zoom based on beat detection or continuous audio
-    float zoomFactor = 1.0;
-    
-    // If beat mode is enabled - zoom based on beats with strong but smooth response
-    if (uBeatMode > 0.5) {
-      if (uBeatDetected > 0.5) {
-        // Zastępujemy ostrą zmianę płynniejszą funkcją wykładniczą
-        float beatIntensity = pow(smoothAudio, 2.0) * 3.0;
-        zoomFactor = 1.0 + beatIntensity;
-      } else {
-        // Gradual zoom out between beats
-        float fadeOut = smoothAudio * (0.5 + 0.5 * sin(time * 4.0));
-        zoomFactor = 1.0 + fadeOut;
-      }
-    } else {
-      // Continuous audio-reactive mode with smoother transitions
-      // Dodajemy złoty podział do pulsowania dla naturalniejszego efektu
-      zoomFactor = 1.0 + smoothAudio * 2.0 + 0.05 * sin(time * PHI);
-    }
-    
-    // Apply zoom factor
-    float pulsatingZoom = mix(uZoom, uZoom * zoomFactor, smoothstep(0.0, 1.0, smoothAudio));          
-    // Make the fractal truly seamless with proper centering
-    vec2 center = vec2(0.0, 0.0);
-    uv = (uv - center) / pulsatingZoom + center;
-    
-    // Add drift in various directions
-    uv += vec2(sin(time * 0.3 * PHI) * 0.3, cos(time * 0.4 * PHI) * 0.2);          
-    // Fractal implementation
-    vec2 c = uv;
-    vec2 z = vec2(0.0);
-    float iter = 0.0;
-    float smoothValue = 0.0;
-    float lastLength = 0.0;
-    
-    // Variable fractal shape - now reacts to audio
-    float audioPowerBoost = 1.0 + smoothAudio * 2.0; // Greater reaction for power but smoother
-    float morphPower = uPower * (1.0 + 0.2 * sin(time * 0.7)) * audioPowerBoost;
-
-    // Fibonacci spiral constants dla naturalniejszych wzorów fraktalnych
-    float goldenAngle = PHI * 2.0 * 3.14159; 
-    
-    for (int i = 0; i < MAX_ITERATIONS; i++) {
-      if (float(i) > uDetail) break;
-      
-      // Ulepszona wersja spirali z wykorzystaniem wzorów Fibonacciego
-      float spiralParam = length(z) * PHI; // Parameter bazujący na Fibonaccim
-      float angle = atan(z.y, z.x) * morphPower + time * 0.2 + smoothAudio * 3.0;
-      float radius = pow(length(z) + 0.1 * sin(time * 0.5 * PHI), morphPower);
-
-      // Dodajemy spirale Fibonacciego zamiast zwykłej sinusoidy
-      float spiral = 0.1 * sin(spiralParam * 10.0 + time * PHI) * uSpiralFactor;
-      angle += spiral;
-      z = vec2(radius * cos(angle), radius * sin(angle)) + c;
-      
-      // Store length before checking limit
-      lastLength = length(z);
-      
-      if (lastLength > 2.0) {
-        // Ulepszone przejście na krawędzi z podwójnym wygładzaniem
-        float edge = length(z) / 2.0;
-        // Podstawowa wartość smoothing
-        float baseSmooth = float(i) - log(log(lastLength)) / log(2.0);
-        // Dodatkowe wygładzanie krawędzi z funkcją Hermite
-        float edgeFactor = smoothClamp((lastLength - 1.8) / 0.4, 0.0, 1.0);
-        // Mieszanie wartości dla płynniejszego przejścia
-        smoothValue = mix(baseSmooth, float(i), edgeFactor * smoothstep(1.0, 2.0, edge));
-        break;
-      }
-      
-      iter += 1.0;
-    }
-    
-    // Psychedelic fractal coloring
-    vec3 color;
-    
-    if (iter < uDetail) {
-      // Smoothing factor for better color transitions
-      float smoothed = iter - log2(log2(lastLength)) + 4.0;
-      float normalized = smoothed / uDetail;
-      
-      // Color modulation by time, position and audio
-      float audioColorShift = time * 0.1 + audioEffect * 3.0; // Audio affects colors
-      float colorIndex = normalized * uColorScale + audioColorShift;
-      colorIndex += sin(uv.x * 10.0 + time + audioEffect * 5.0) * 0.1;
-      colorIndex += cos(uv.y * 8.0 + time * 0.8) * 0.1;
-      
-      // Color palette selection based on uColorPalette uniform
-      vec3 a, b, c, d;
-      
-      // Default psytrance palette
-      if (uColorPalette == 0) { // psytrance
-          a = vec3(0.8, 0.5, 0.4);
-          b = vec3(0.2, 0.4, 0.2);
-          c = vec3(2.0, 1.0, 1.0);
-          d = vec3(0.0, 0.33, 0.67);
-      } 
-      else if (uColorPalette == 1) { // mandelbrot classic
-          a = vec3(0.5, 0.2, 0.8);
-          b = vec3(0.3, 0.5, 0.3);
-          c = vec3(1.0, 1.0, 2.0);
-          d = vec3(0.2, 0.4, 0.6);
-      }
-      else if (uColorPalette == 2) { // burning ship
-          a = vec3(0.6, 0.1, 0.0);
-          b = vec3(0.4, 0.2, 0.1);
-          c = vec3(3.0, 2.0, 1.0);
-          d = vec3(0.3, 0.2, 0.1);
-      }
-      else if (uColorPalette == 3) { // julia set
-          a = vec3(0.2, 0.5, 0.8);
-          b = vec3(0.8, 0.2, 0.5);
-          c = vec3(1.0, 2.0, 1.0);
-          d = vec3(0.6, 0.0, 0.8);
-      }
-      else if (uColorPalette == 4) { // rainbow
-          a = vec3(0.5, 0.5, 0.5);
-          b = vec3(0.5, 0.5, 0.5);
-          c = vec3(1.0, 1.0, 1.0);
-          d = vec3(0.0, 0.33, 0.67);
-      }
-      else if (uColorPalette == 5) { // neon dreams
-          a = vec3(0.2, 0.1, 0.3);
-          b = vec3(0.9, 0.1, 0.8);
-          c = vec3(2.0, 0.5, 0.8);
-          d = vec3(0.1, 0.8, 0.9);
-      }
-      
-      // Super-charged beat detection for color flashes
-      if (uBeatDetected > 0.5) {
-          // More aggressive color shift on beats
-          a = mix(a, vec3(1.0, 1.0, 1.0), 0.5 * uColorReactivity);
-          b = mix(b, vec3(0.9, 0.1, 0.9), 0.6 * uColorReactivity);
-          // Flash effect on beats
-          c = mix(c, vec3(3.0, 3.0, 3.0), 0.4 * uColorReactivity);
-      }
-      
-      // Apply enhanced continuous audio reactivity to colors
-      float colorAudioEffect = audioEffect * uColorReactivity;
-      // Create color cycling effect based on audio
-      a = mix(a, vec3(a.z, a.x, a.y), colorAudioEffect);
-      b = mix(b, vec3(b.z, b.x, b.y), colorAudioEffect);
-      // Make colors pulse with audio intensity
-      float pulseFactor = 1.0 + colorAudioEffect * 0.5;
-      a *= pulseFactor;
-      b *= pulseFactor;
-      
-      color = a + b * cos(6.28318 * (c * colorIndex + d));
-      color = pow(color, vec3(0.75)); // Enhance saturation
-      
-      // Dodaj wygładzanie koloru na granicach
-      float edgeDistance = abs(iter - uDetail * 0.7) / (uDetail * 0.3);
-      if (edgeDistance < 0.3) {
-        // Tworzymy dodatkową warstwę koloru dla wygładzenia
-        float edgeFactor = smoothClamp(1.0 - edgeDistance / 0.3, 0.0, 1.0);
-        vec3 blendColor = color * 0.8 + vec3(0.1, 0.05, 0.15);
+      // Fragment shader - here's all the fractal magic
+      const fsSource = `
+        precision mediump float;
+        varying vec2 vTexCoord;
         
-        // Dodajemy teksturę Fibonacciego by ukryć artefakty
-        float fibTex = sin(atan(uv.y, uv.x) * PHI * 8.0 + length(uv) * 25.0 * PHI) * 0.5 + 0.5;
-        fibTex = mix(fibTex, 0.5, 0.3); // Zmiękczamy teksturę
+        uniform float uTime;
+        uniform float uZoom;
+        uniform float uDetail;
+        uniform float uPower;
+        uniform float uColorScale;
+        uniform vec2 uResolution;
+        uniform float uMetallic;
+        uniform float uInstances;
+        uniform float uAudioVolume;  // Audio volume level
+        uniform float uAudioReactivity; // Audio reactivity
+        uniform float uSpiralFactor; // Spiral factor
+        uniform float uBeatDetected; // Beat detection flag
+        uniform float uBeatMode; // Beat mode enabled
+        uniform float uColorReactivity; // Color reactivity
+        uniform int uColorPalette; // Color palette selection
+        uniform float uAngleChange; // Angle change rate
+        uniform float uCenterVortex; // Center vortex intensity
+        uniform float uAngleBeat; // Angle beat mode (0 or 1)
         
-        // Mieszamy kolory z użyciem funkcji smoothClamp dla łagodniejszych przejść
-        color = mix(color, blendColor, edgeFactor * 0.6 * fibTex);
-      }
-
-      // Add concentric circles modulated by uMetallic and audio
-      float ringFreq = mix(10.0, 40.0, uMetallic) * (1.0 + audioEffect * 2.0);
-      float rings = sin(lastLength * ringFreq - time * 5.0) * 0.5 + 0.5;
-      color = mix(color, color * vec3(rings, 1.0-rings, rings*1.5), 0.3 * uMetallic);
-      
-      // Add pulsing effect synchronized with beat and audio
-      float beat = pow(sin(time * 4.0) * 0.5 + 0.5, 8.0) + audioEffect;
-      color = mix(color, vec3(1.0, 0.7, 0.2), beat * uMetallic * 0.5);
-      
-      // Hyperspiral in areas close to boundary
-      if (iter > uDetail * 0.7) {
-        float spiral = sin(atan(uv.y, uv.x) * 10.0 + length(uv) * 30.0 - time * 3.0) * 0.5 + 0.5;
-        float spiralIntensity = pow(normalized, 3.0) * uMetallic * (1.0 + audioEffect);
-        vec3 spiralColor = a + b * cos(6.28318 * (c * (spiral + time * 0.2) + d));
-        spiralColor = pow(spiralColor, vec3(0.75));
-        color = mix(color, spiralColor, spiralIntensity * 0.7);
-      }
-    } else {
-      // Hypnotic center core visualization - ultra psychedelic
-      float dist = length(uv);
-
-      // Define an angle for the center core calculations
-      float centerAngle = atan(uv.y, uv.x);
-      
-      // Dodaj płynne przejścia w centrum spirali
-      float smoothCenter = 0.0;
-      for (int i = 1; i <= 5; i++) {
-        float fi = float(i);
-        float centerFreq = 30.0 + fi * 5.0 * PHI;
-        float centerPhase = time * (0.3 + fi * 0.1) * PHI;
+        #define MAX_ITERATIONS 100
         
-        // Tworzymy nakładające się warstwy dla wygładzenia
-        smoothCenter += sin(centerAngle * (PHI * fi) + dist * centerFreq - centerPhase) * (0.2 / fi);
-      }
-      smoothCenter = smoothCenter * 0.5 + 0.5;
-      
-      // Dynamic angle rotation based on audio and time
-      // This creates the changing angle effect every 1-2 seconds
-      float angleModulation = sin(time * 0.5) * 2.0 * 3.14159 * (1.0 + audioEffect * 3.0);
-      float angleOffset = time * 0.2 + audioEffect * 5.0; // Makes it rotate with audio
-      
-      // Apply angle beat effect if enabled
-      if (uAngleBeat > 0.5 && uBeatDetected > 0.5) {
-        // Sharp angle change on beat
-        angleModulation += 3.14159 * 0.5 * uAudioReactivity;
-      }
-      
-      float finalAngle = centerAngle + angleModulation + angleOffset;
-      
-      // Add angle change speed based on slider
-      finalAngle += time * uAngleChange * 2.0;
-      
-      // Super detailed hypnotic spiral in center
-      float spiralFreq = 40.0 * (1.0 + audioEffect * 3.0);
-      float spiral = sin(finalAngle * uInstances + dist * spiralFreq - time * 4.0) * 0.5 + 0.5;
-      float spiral2 = cos(finalAngle * (uInstances * 0.7) - dist * spiralFreq * 1.8 + time * 5.0) * 0.5 + 0.5;
-      
-      // Center vortex effect - stronger with slider value
-      // Center vortex effect z płynniejszymi przejściami
-      float vortexStrength = uCenterVortex * (1.0 + smoothAudio * 3.0);
-      // Używamy smoothCenter dla mieszania
-      float vortexBase = sin(dist * 30.0 * PHI - time * 6.0 * PHI) * 0.5 + 0.5;
-      float vortexBlend = mix(vortexBase, smoothCenter, 0.4);
-      spiral = mix(spiral, vortexBlend, vortexStrength);
-
-      // Rainbow spiral effect with audio reactivity
-      float rainbowSpeed = 2.0 + audioEffect * 4.0;
-      float rainbowFreq = 10.0 + audioEffect * 20.0;
-      float rainbowPhase = dist * rainbowFreq - time * rainbowSpeed;
-      
-      // Ultra-bright pulsing colors in spiral
-      vec3 a, b, c, d;
-      
-      // Rainbowy colors for center core with high saturation
-      a = vec3(0.9, 0.3, 0.9);
-      b = vec3(0.8, 0.8, 0.2);
-      c = vec3(3.0, 2.0, 1.0); 
-      d = vec3(0.3, 0.3, 0.7);
-      
-      // Change base colors based on audio
-      a = mix(a, vec3(0.4, 0.8, 0.7), audioEffect * 0.7);
-      b = mix(b, vec3(0.7, 0.2, 0.6), audioEffect * 0.7);
-      
-      vec3 spiralColor1 = a + b * cos(6.28318 * (c * (spiral + time * 0.3 + audioEffect) + d));
-      vec3 spiralColor2 = a + b * cos(6.28318 * (c * (spiral2 - time * 0.2) + d));
-      spiralColor1 = pow(spiralColor1, vec3(0.75));
-      spiralColor2 = pow(spiralColor2, vec3(0.75));
-      
-      // Mix spiral colors
-      color = mix(spiralColor1, spiralColor2, spiral * spiral2);
-      
-      // Depth effect in spiral
-      float depth = sin(dist * 20.0 - time + audioEffect * 10.0) * 0.5 + 0.5;
-      color *= depth * 1.5;
-      
-      // Add colorful rings
-      float rings = sin(dist * 50.0 - time * 3.0 + audioEffect * 20.0) * 0.5 + 0.5;
-      color = mix(color, vec3(rings, rings*0.5, 1.0-rings) * 1.5, 0.4);
-    }
-    
-    // Simulate multiple instances
-    float instances = max(1.0, uInstances);
-    float instEff = mod(iter/uDetail * instances, 1.0);
-    
-    // Fluorescence effect - as if glowing under UV
-    color = mix(color, color * color, 0.3);
-    
-    // Colorful glow with audio boost
-    float glow = sin(time * 2.0) * 0.5 + 0.5 + audioEffect * 0.5;
-    color += vec3(0.1, 0.05, 0.2) * glow;
-    
-    // Increase overall brightness in response to audio
-    color *= 1.0 + audioEffect * 0.5;
-    
-    gl_FragColor = vec4(color, 1.0);
-  }
-`;
+        void main() {
+          // Audio effect - use volume to modulate parameters
+          float audioEffect = uAudioVolume * uAudioReactivity;
+          
+          // Scale coordinates
+          vec2 uv = vTexCoord;
+          uv = uv * 2.0 - 1.0;
+          uv.x *= uResolution.x / uResolution.y;
+          
+          // Time animation and rotation
+          float time = uTime * 0.3;
+          mat2 rot = mat2(cos(time * 0.2), -sin(time * 0.2), sin(time * 0.2), cos(time * 0.2));
+          uv = rot * uv;
+          
+          // Zoom based on beat detection or continuous audio
+          float zoomFactor = 1.0;
+          
+          // If beat mode is enabled - zoom based on beats with strong response
+          if (uBeatMode > 0.5) {
+            // Beat detected - quick zoom in then slower zoom out
+            float beatEffectTime = mod(uTime * 30.0, 100.0);
+            if (uBeatDetected > 0.5) {
+              // Sharp zoom in when beat hits
+              zoomFactor = 1.0 + audioEffect * 3.0;
+            } else {
+              // Gradual zoom out between beats
+              zoomFactor = 1.0 + audioEffect * 1.0;
+            }
+          } else {
+            // Continuous audio-reactive mode
+            zoomFactor = 1.0 + audioEffect * 2.0 + 0.05 * sin(time * 2.0);
+          }
+          
+          // Apply zoom factor
+          float pulsatingZoom = uZoom * zoomFactor;
+          
+          // Make the fractal truly seamless with proper centering
+          vec2 center = vec2(0.0, 0.0);
+          uv = (uv - center) / pulsatingZoom + center;
+          
+          // Add drift in various directions
+          uv += vec2(sin(time * 0.3) * 0.3, cos(time * 0.4) * 0.2);
+          
+          // Fractal implementation
+          vec2 c = uv;
+          vec2 z = vec2(0.0);
+          float iter = 0.0;
+          float smoothValue = 0.0;
+          float lastLength = 0.0;
+          
+          // Variable fractal shape - now reacts to audio
+          float audioPowerBoost = 1.0 + audioEffect * 2.0; // Greater reaction for power
+          float morphPower = uPower * (1.0 + 0.2 * sin(time * 0.7)) * audioPowerBoost;
+          
+          for (int i = 0; i < MAX_ITERATIONS; i++) {
+            if (float(i) > uDetail) break;
+            
+            // Spiral version of Mandelbrot with time twist and audio
+            float angle = atan(z.y, z.x) * morphPower + time * 0.2 + audioEffect * 3.0;
+            float radius = pow(length(z) + 0.1 * sin(time * 0.5), morphPower);
+            float spiral = 0.1 * sin(length(z) * 10.0 + time * 2.0) * uSpiralFactor;
+            angle += spiral;
+            z = vec2(radius * cos(angle), radius * sin(angle)) + c;
+            
+            // Store length before checking limit
+            lastLength = length(z);
+            
+            if (lastLength > 2.0) {
+              smoothValue = float(i) - log(log(lastLength)) / log(2.0);
+              break;
+            }
+            
+            iter += 1.0;
+          }
+          
+          // Psychedelic fractal coloring
+          vec3 color;
+          
+          if (iter < uDetail) {
+            // Smoothing factor for better color transitions
+            float smoothed = iter - log2(log2(lastLength)) + 4.0;
+            float normalized = smoothed / uDetail;
+            
+            // Color modulation by time, position and audio
+            float audioColorShift = time * 0.1 + audioEffect * 3.0; // Audio affects colors
+            float colorIndex = normalized * uColorScale + audioColorShift;
+            colorIndex += sin(uv.x * 10.0 + time + audioEffect * 5.0) * 0.1;
+            colorIndex += cos(uv.y * 8.0 + time * 0.8) * 0.1;
+            
+            // Color palette selection based on uColorPalette uniform
+            vec3 a, b, c, d;
+            
+            // Default psytrance palette
+            if (uColorPalette == 0) { // psytrance
+                a = vec3(0.8, 0.5, 0.4);
+                b = vec3(0.2, 0.4, 0.2);
+                c = vec3(2.0, 1.0, 1.0);
+                d = vec3(0.0, 0.33, 0.67);
+            } 
+            else if (uColorPalette == 1) { // mandelbrot classic
+                a = vec3(0.5, 0.2, 0.8);
+                b = vec3(0.3, 0.5, 0.3);
+                c = vec3(1.0, 1.0, 2.0);
+                d = vec3(0.2, 0.4, 0.6);
+            }
+            else if (uColorPalette == 2) { // burning ship
+                a = vec3(0.6, 0.1, 0.0);
+                b = vec3(0.4, 0.2, 0.1);
+                c = vec3(3.0, 2.0, 1.0);
+                d = vec3(0.3, 0.2, 0.1);
+            }
+            else if (uColorPalette == 3) { // julia set
+                a = vec3(0.2, 0.5, 0.8);
+                b = vec3(0.8, 0.2, 0.5);
+                c = vec3(1.0, 2.0, 1.0);
+                d = vec3(0.6, 0.0, 0.8);
+            }
+            else if (uColorPalette == 4) { // rainbow
+                a = vec3(0.5, 0.5, 0.5);
+                b = vec3(0.5, 0.5, 0.5);
+                c = vec3(1.0, 1.0, 1.0);
+                d = vec3(0.0, 0.33, 0.67);
+            }
+            else if (uColorPalette == 5) { // neon dreams
+                a = vec3(0.2, 0.1, 0.3);
+                b = vec3(0.9, 0.1, 0.8);
+                c = vec3(2.0, 0.5, 0.8);
+                d = vec3(0.1, 0.8, 0.9);
+            }
+            
+            // Super-charged beat detection for color flashes
+            if (uBeatDetected > 0.5) {
+                // More aggressive color shift on beats
+                a = mix(a, vec3(1.0, 1.0, 1.0), 0.5 * uColorReactivity);
+                b = mix(b, vec3(0.9, 0.1, 0.9), 0.6 * uColorReactivity);
+                // Flash effect on beats
+                c = mix(c, vec3(3.0, 3.0, 3.0), 0.4 * uColorReactivity);
+            }
+            
+            // Apply enhanced continuous audio reactivity to colors
+            float colorAudioEffect = audioEffect * uColorReactivity;
+            // Create color cycling effect based on audio
+            a = mix(a, vec3(a.z, a.x, a.y), colorAudioEffect);
+            b = mix(b, vec3(b.z, b.x, b.y), colorAudioEffect);
+            // Make colors pulse with audio intensity
+            float pulseFactor = 1.0 + colorAudioEffect * 0.5;
+            a *= pulseFactor;
+            b *= pulseFactor;
+            
+            color = a + b * cos(6.28318 * (c * colorIndex + d));
+            color = pow(color, vec3(0.75)); // Enhance saturation
+            
+            // Add concentric circles modulated by uMetallic and audio
+            float ringFreq = mix(10.0, 40.0, uMetallic) * (1.0 + audioEffect * 2.0);
+            float rings = sin(lastLength * ringFreq - time * 5.0) * 0.5 + 0.5;
+            color = mix(color, color * vec3(rings, 1.0-rings, rings*1.5), 0.3 * uMetallic);
+            
+            // Add pulsing effect synchronized with beat and audio
+            float beat = pow(sin(time * 4.0) * 0.5 + 0.5, 8.0) + audioEffect;
+            color = mix(color, vec3(1.0, 0.7, 0.2), beat * uMetallic * 0.5);
+            
+            // Hyperspiral in areas close to boundary
+            if (iter > uDetail * 0.7) {
+              float spiral = sin(atan(uv.y, uv.x) * 10.0 + length(uv) * 30.0 - time * 3.0) * 0.5 + 0.5;
+              float spiralIntensity = pow(normalized, 3.0) * uMetallic * (1.0 + audioEffect);
+              vec3 spiralColor = a + b * cos(6.28318 * (c * (spiral + time * 0.2) + d));
+              spiralColor = pow(spiralColor, vec3(0.75));
+              color = mix(color, spiralColor, spiralIntensity * 0.7);
+            }
+          } else {
+            // Hypnotic center core visualization - ultra psychedelic
+            float dist = length(uv);
+            
+            // Dynamic angle rotation based on audio and time
+            // This creates the changing angle effect every 1-2 seconds
+            float angleModulation = sin(time * 0.5) * 2.0 * 3.14159 * (1.0 + audioEffect * 3.0);
+            float angleOffset = time * 0.2 + audioEffect * 5.0; // Makes it rotate with audio
+            
+            // Apply angle beat effect if enabled
+            if (uAngleBeat > 0.5 && uBeatDetected > 0.5) {
+              // Sharp angle change on beat
+              angleModulation += 3.14159 * 0.5 * uAudioReactivity;
+            }
+            
+            float angle = atan(uv.y, uv.x) + angleModulation + angleOffset;
+            
+            // Add angle change speed based on slider
+            angle += time * uAngleChange * 2.0;
+            
+            // Super detailed hypnotic spiral in center
+            float spiralFreq = 40.0 * (1.0 + audioEffect * 3.0);
+            float spiral = sin(angle * uInstances + dist * spiralFreq - time * 4.0) * 0.5 + 0.5;
+            float spiral2 = cos(angle * (uInstances * 0.7) - dist * spiralFreq * 1.8 + time * 5.0) * 0.5 + 0.5;
+            
+            // Center vortex effect - stronger with slider value
+            float vortexStrength = uCenterVortex * (1.0 + audioEffect * 3.0);
+            spiral = mix(spiral, sin(dist * 30.0 - time * 6.0) * 0.5 + 0.5, vortexStrength);
+            
+            // Rainbow spiral effect with audio reactivity
+            float rainbowSpeed = 2.0 + audioEffect * 4.0;
+            float rainbowFreq = 10.0 + audioEffect * 20.0;
+            float rainbowPhase = dist * rainbowFreq - time * rainbowSpeed;
+            
+            // Ultra-bright pulsing colors in spiral
+            vec3 a, b, c, d;
+            
+            // Rainbowy colors for center core with high saturation
+            a = vec3(0.9, 0.3, 0.9);
+            b = vec3(0.8, 0.8, 0.2);
+            c = vec3(3.0, 2.0, 1.0); 
+            d = vec3(0.3, 0.3, 0.7);
+            
+            // Change base colors based on audio
+            a = mix(a, vec3(0.4, 0.8, 0.7), audioEffect * 0.7);
+            b = mix(b, vec3(0.7, 0.2, 0.6), audioEffect * 0.7);
+            
+            vec3 spiralColor1 = a + b * cos(6.28318 * (c * (spiral + time * 0.3 + audioEffect) + d));
+            vec3 spiralColor2 = a + b * cos(6.28318 * (c * (spiral2 - time * 0.2) + d));
+            spiralColor1 = pow(spiralColor1, vec3(0.75));
+            spiralColor2 = pow(spiralColor2, vec3(0.75));
+            
+            // Mix spiral colors
+            color = mix(spiralColor1, spiralColor2, spiral * spiral2);
+            
+            // Depth effect in spiral
+            float depth = sin(dist * 20.0 - time + audioEffect * 10.0) * 0.5 + 0.5;
+            color *= depth * 1.5;
+            
+            // Add colorful rings
+            float rings = sin(dist * 50.0 - time * 3.0 + audioEffect * 20.0) * 0.5 + 0.5;
+            color = mix(color, vec3(rings, rings*0.5, 1.0-rings) * 1.5, 0.4);
+          }
+          
+          // Simulate multiple instances
+          float instances = max(1.0, uInstances);
+          float instEff = mod(iter/uDetail * instances, 1.0);
+          
+          // Fluorescence effect - as if glowing under UV
+          color = mix(color, color * color, 0.3);
+          
+          // Colorful glow with audio boost
+          float glow = sin(time * 2.0) * 0.5 + 0.5 + audioEffect * 0.5;
+          color += vec3(0.1, 0.05, 0.2) * glow;
+          
+          // Increase overall brightness in response to audio
+          color *= 1.0 + audioEffect * 0.5;
+          
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `;
 
       // Shader compilation
       function compileShader(gl, source, type) {
