@@ -295,6 +295,115 @@
     // Wait for DOM to fully load
 // Add this code to your HTML file, replacing the existing initialization in the DOMContentLoaded event
 // This makes the Burning Ship Extreme preset load automatically
+// Add these global constants at the beginning of your code
+// This should be added right after initializing your variables in the DOMContentLoaded event listener
+
+// Define audio processing constants globally
+const BEAT_THRESHOLD = 0.15;
+const BEAT_MIN_INTERVAL = 100; // ms
+let lastBeatTime = 0;
+
+// Function to analyze audio data (with fixed reference to constants)
+function analyzeAudio() {
+  if (!audioEnabled || !analyser) return 0;
+  
+  // Get frequency data
+  analyser.getByteFrequencyData(audioDataArray);
+  
+  // Calculate average volume level
+  let sum = 0;
+  let bassBins = 0;
+  let bassSum = 0;
+  for (let i = 0; i < audioDataArray.length; i++) {
+    sum += audioDataArray[i];
+    
+    // Calculate bass frequencies separately (first 1/4 of bins typically)
+    if (i < audioDataArray.length / 4) {
+      bassSum += audioDataArray[i];
+      bassBins++;
+    }
+  }
+  let avg = sum / audioDataArray.length;
+  
+  // Store previous volume for delta calculation
+  lastVolume = audioVolume;
+  
+  // Normalize to 0-1 range
+  audioVolume = avg / 255;
+  
+  // Calculate bass energy - useful for beat detection
+  let bassEnergy = bassBins > 0 ? (bassSum / bassBins) / 255 : 0;
+  
+  // Calculate volume change
+  volumeDelta = audioVolume - lastVolume;
+  
+  // Shift volume history
+  volumeHistory.shift();
+  volumeHistory.push(audioVolume);
+  
+  // Beat detection
+  const now = Date.now();
+  beatDetected = false;
+  
+  // Beat is detected when:
+  // 1. Volume is above average threshold
+  // 2. Volume is significantly higher than recent history
+  // 3. Enough time has passed since last beat
+  
+  const avgHistory = volumeHistory.reduce((sum, vol) => sum + vol, 0) / volumeHistory.length;
+  
+  if (
+    audioVolume > 0.2 && // Minimum volume threshold
+    volumeDelta > BEAT_THRESHOLD && // Sudden increase
+    audioVolume > avgHistory * 1.2 && // Higher than recent average
+    now - lastBeatTime > BEAT_MIN_INTERVAL // Not too soon after last beat
+  ) {
+    beatDetected = true;
+    lastBeatTime = now;
+  }
+  
+  // Shift beat history
+  beatHistory.shift();
+  beatHistory.push(beatDetected);
+  
+  // Update VU meter
+  document.getElementById('vuLevel').style.width = (audioVolume * 100) + '%';
+  
+  return audioVolume;
+}
+
+// Function to start audio analysis
+function setupAudio() {
+  try {
+    // Create audio context
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    
+    // Configure analyzer
+    analyser.fftSize = 256;
+    audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    // Add limiter to prevent crashes from loud sounds
+    analyser.smoothingTimeConstant = 0.8; // Default is 0.8, this smooths out sudden changes
+    
+    // Connect microphone
+    navigator.mediaDevices.getUserMedia({audio: true})
+      .then(function(stream) {
+        microphone = audioContext.createMediaStreamSource(stream);
+        microphone.connect(analyser);
+        audioEnabled = true;
+        document.getElementById('audioEnable').textContent = 'Audio Reactive Mode Enabled!';
+        document.getElementById('audioEnable').style.background = 'linear-gradient(to right, #00ff99, #ff00ff)';
+      })
+      .catch(function(err) {
+        console.error('Microphone access error:', err);
+        alert('Cannot access microphone. Check permissions.');
+      });
+  } catch (e) {
+    console.error('Audio API initialization error:', e);
+    alert('Your browser does not support Web Audio API.');
+  }
+}
 
 document.addEventListener('DOMContentLoaded', function() {
   // Controls toggle functionality
@@ -476,74 +585,216 @@ function setupAudio() {
   }
 }
 
-      // Function for real-time audio analysis
-      function analyzeAudio() {
-        if (!audioEnabled || !analyser) return 0;
-        
-        // Get frequency data
-        analyser.getByteFrequencyData(audioDataArray);
-        
-        // Calculate average volume level
-        let sum = 0;
-        let bassBins = 0;
-        let bassSum = 0;
-        for (let i = 0; i < audioDataArray.length; i++) {
-          sum += audioDataArray[i];
-          
-          // Calculate bass frequencies separately (first 1/4 of bins typically)
-          if (i < audioDataArray.length / 4) {
-            bassSum += audioDataArray[i];
-            bassBins++;
-          }
-        }
-        let avg = sum / audioDataArray.length;
-        
-        // Store previous volume for delta calculation
-        lastVolume = audioVolume;
-        
-        // Normalize to 0-1 range
-        audioVolume = avg / 255;
-        
-        // Calculate bass energy - useful for beat detection
-        let bassEnergy = bassBins > 0 ? (bassSum / bassBins) / 255 : 0;
-        
-        // Calculate volume change
-        volumeDelta = audioVolume - lastVolume;
-        
-        // Shift volume history
-        volumeHistory.shift();
-        volumeHistory.push(audioVolume);
-        
-        // Beat detection
-        const now = Date.now();
-        beatDetected = false;
-        
-        // Beat is detected when:
-        // 1. Volume is above average threshold
-        // 2. Volume is significantly higher than recent history
-        // 3. Enough time has passed since last beat
-        
-        const avgHistory = volumeHistory.reduce((sum, vol) => sum + vol, 0) / volumeHistory.length;
-        
-        if (
-          audioVolume > 0.2 && // Minimum volume threshold
-          volumeDelta > BEAT_THRESHOLD && // Sudden increase
-          audioVolume > avgHistory * 1.2 && // Higher than recent average
-          now - lastBeatTime > BEAT_MIN_INTERVAL // Not too soon after last beat
-        ) {
-          beatDetected = true;
-          lastBeatTime = now;
-        }
-        
-        // Shift beat history
-        beatHistory.shift();
-        beatHistory.push(beatDetected);
-        
-        // Update VU meter
-        document.getElementById('vuLevel').style.width = (audioVolume * 100) + '%';
-        
-        return audioVolume;
+// Add this improved version of the analyzeAudio function to prevent crashes from loud sounds
+// Replace your existing analyzeAudio function with this one
+
+function analyzeAudio() {
+  if (!audioEnabled || !analyser) return 0;
+  
+  try {
+    // Get frequency data
+    analyser.getByteFrequencyData(audioDataArray);
+    
+    // Calculate average volume level
+    let sum = 0;
+    let bassBins = 0;
+    let bassSum = 0;
+    for (let i = 0; i < audioDataArray.length; i++) {
+      sum += audioDataArray[i];
+      
+      // Calculate bass frequencies separately (first 1/4 of bins typically)
+      if (i < audioDataArray.length / 4) {
+        bassSum += audioDataArray[i];
+        bassBins++;
       }
+    }
+    let avg = sum / audioDataArray.length;
+    
+    // Store previous volume for delta calculation
+    lastVolume = audioVolume;
+    
+    // Normalize to 0-1 range with SAFETY LIMITER to prevent crashes
+    const rawVolume = avg / 255;
+    
+    // Apply soft limiter with sigmoid function to prevent extreme values
+    // This creates a smooth curve that approaches 1 but never exceeds it
+    const limitedVolume = 1 / (1 + Math.exp(-5 * (rawVolume - 0.5))) * 0.95;
+    
+    // Apply temporal smoothing to prevent sudden spikes
+    audioVolume = audioVolume * 0.3 + limitedVolume * 0.7;
+    
+    // Calculate bass energy - useful for beat detection
+    let bassEnergy = bassBins > 0 ? (bassSum / bassBins) / 255 : 0;
+    
+    // Calculate volume change with limiting
+    const rawDelta = audioVolume - lastVolume;
+    // Limit the maximum delta to prevent crashes from extreme changes
+    volumeDelta = Math.max(-0.3, Math.min(0.3, rawDelta));
+    
+    // Shift volume history
+    volumeHistory.shift();
+    volumeHistory.push(audioVolume);
+    
+    // Beat detection with improved stability
+    const now = Date.now();
+    beatDetected = false;
+    
+    // Beat is detected when:
+    // 1. Volume is above average threshold
+    // 2. Volume is significantly higher than recent history
+    // 3. Enough time has passed since last beat
+    
+    const avgHistory = volumeHistory.reduce((sum, vol) => sum + vol, 0) / volumeHistory.length;
+    
+    // BEAT_THRESHOLD and BEAT_MIN_INTERVAL are now local constants for safety
+    const BEAT_THRESHOLD = 0.12; // Slightly reduced from 0.15 for stability
+    const BEAT_MIN_INTERVAL = 120; // Slightly increased from 100ms for stability
+    
+    if (
+      audioVolume > 0.15 && // Minimum volume threshold
+      volumeDelta > BEAT_THRESHOLD && // Sudden increase
+      audioVolume > avgHistory * 1.15 && // Higher than recent average
+      now - lastBeatTime > BEAT_MIN_INTERVAL // Not too soon after last beat
+    ) {
+      beatDetected = true;
+      lastBeatTime = now;
+    }
+    
+    // Shift beat history
+    beatHistory.shift();
+    beatHistory.push(beatDetected);
+    
+    // Update VU meter with limited value to prevent visual glitches
+    const vuMeter = document.getElementById('vuLevel');
+    if (vuMeter) {
+      vuMeter.style.width = (audioVolume * 100) + '%';
+    }
+    
+    return audioVolume;
+  } catch (error) {
+    // Error recovery to prevent crashes
+    console.error('Audio analysis error:', error);
+    
+    // Return a safe default value instead of crashing
+    return 0.1;
+  }
+}
+
+// Add this error recovery function to prevent black screens
+// Add this near the start of your render function
+
+function render() {
+  // Add this error recovery mechanism at the beginning of the render function
+  try {
+    // Update size
+    resizeCanvas();
+    
+    // Settings
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    
+    // Use program
+    gl.useProgram(program);
+    
+    // Position
+    gl.enableVertexAttribArray(positionAttributeLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+    
+    // Audio analysis with error handling
+    let currentAudioVolume = 0;
+    try {
+      currentAudioVolume = analyzeAudio();
+    } catch (error) {
+      console.error('Failed to process audio:', error);
+      // Use a safe default value to prevent crashes
+      currentAudioVolume = 0.1;
+    }
+    
+    // Rest of your render function...
+    
+  } catch (renderError) {
+    console.error('Render error detected, attempting recovery:', renderError);
+    
+    // Emergency reset of audio values to prevent further crashes
+    audioVolume = 0.1;
+    beatDetected = false;
+    lastVolume = 0.1;
+    volumeDelta = 0;
+    
+    // Clear screen to avoid visual glitches
+    try {
+      gl.clearColor(0.0, 0.0, 0.0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    } catch (e) {
+      console.error('Failed to clear screen during recovery');
+    }
+  }
+  
+  // Always continue animation loop, even after errors
+  requestAnimationFrame(render);
+}
+
+// Add this error handling for the setupAudio function
+// Replace your setupAudio function with this improved version
+
+function setupAudio() {
+  try {
+    // Create audio context
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    
+    // Configure analyzer with more stable settings
+    analyser.fftSize = 256; // Standard size for visualization
+    analyser.smoothingTimeConstant = 0.85; // Add smoothing (default is 0.8)
+    analyser.minDecibels = -85; // Default is -100, making this less sensitive
+    analyser.maxDecibels = -30; // Default is -30, keeping this the same
+    
+    audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    // Define BEAT_THRESHOLD and BEAT_MIN_INTERVAL if they're not defined elsewhere
+    if (typeof BEAT_THRESHOLD === 'undefined') window.BEAT_THRESHOLD = 0.12;
+    if (typeof BEAT_MIN_INTERVAL === 'undefined') window.BEAT_MIN_INTERVAL = 120;
+    if (typeof lastBeatTime === 'undefined') window.lastBeatTime = 0;
+    
+    // Connect microphone with error handling
+    navigator.mediaDevices.getUserMedia({audio: true})
+      .then(function(stream) {
+        try {
+          // Create audio source and add limiter
+          microphone = audioContext.createMediaStreamSource(stream);
+          
+          // Add a compressor to prevent peaks
+          const compressor = audioContext.createDynamicsCompressor();
+          compressor.threshold.value = -24;  // Threshold in dB
+          compressor.knee.value = 30;       // Knee in dB
+          compressor.ratio.value = 12;      // Compression ratio
+          compressor.attack.value = 0.003;  // Attack time in seconds
+          compressor.release.value = 0.25;  // Release time in seconds
+          
+          // Connect the nodes: microphone -> compressor -> analyser
+          microphone.connect(compressor);
+          compressor.connect(analyser);
+          
+          audioEnabled = true;
+          document.getElementById('audioEnable').textContent = 'Audio Reactive Mode Enabled!';
+          document.getElementById('audioEnable').style.background = 'linear-gradient(to right, #00ff99, #ff00ff)';
+          
+          console.log('Audio reactive mode successfully enabled with safety limiters.');
+        } catch (setupError) {
+          console.error('Error setting up audio processing chain:', setupError);
+          alert('Error initializing audio processor. Try refreshing the page.');
+        }
+      })
+      .catch(function(err) {
+        console.error('Microphone access error:', err);
+        alert('Cannot access microphone. Check permissions.');
+      });
+  } catch (e) {
+    console.error('Audio API initialization error:', e);
+    alert('Your browser does not support Web Audio API.');
+  }
+}
       
       // Vertex shader - only passes coordinates
       const vsSource = `
